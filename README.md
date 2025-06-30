@@ -1,10 +1,12 @@
 # Bonfire 🔥
 
-What To Do: 
-1: Write npm install in the terminal
-2: Write npx next dev in the terminal
-3: Ctrl+click the local host url
-4:You should be good to go
+**What To Do: **
+
+- Open your terminal
+- Run: `npm install`
+- Run: `npx next dev`
+- Ctrl+Click the localhost URL shown in the terminal
+- You should be good to go ✅
 
 ## About the Project
 
