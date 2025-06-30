@@ -1,5 +1,11 @@
 # Bonfire 🔥
 
+What To Do: 
+1: Write npm install in the terminal
+2: Write npx next dev in the terminal
+3: Ctrl+click the local host url
+4:You should be good to go
+
 ## About the Project
 
 Bonfire is a social event platform that empowers anyone to host or join real-world gatherings — no followers, no clout required. Whether it’s a rooftop jam, a chai meetup, or a quick coding session, Bonfire lets people connect through moments, not metrics.
