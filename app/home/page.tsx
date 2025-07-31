@@ -139,8 +139,8 @@ export default function HomePage() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000,
+        timeout: 15000,
+        maximumAge: 0,
       }
     );
   };
