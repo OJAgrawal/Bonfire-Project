@@ -108,14 +108,19 @@ export default function HomePage() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const location = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        setUserLocation(location);
+        const { latitude, longitude, accuracy } = position.coords;
+
+        console.log("📍 Latitude:", latitude, "Longitude:", longitude, "Accuracy:", accuracy, "meters");
+
+        if (accuracy > 100) {
+          toast.warning(`GPS not very accurate (~${Math.round(accuracy)}m). Try again outdoors.`);
+        } else {
+          toast.success(`Location accurate! (~${Math.round(accuracy)}m)`);
+        }
+
+        setUserLocation({ latitude, longitude });
         setLocationLoading(false);
         setShowLocationPrompt(false);
-        toast.success("Location access granted! Map centred on your area.");
       },
       (error) => {
         setLocationLoading(false);
@@ -140,10 +145,11 @@ export default function HomePage() {
       {
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 0,
+        maximumAge: 0, // ✅ Always fresh location
       }
     );
   };
+
 
   const handleRequestLocation = () => getCurrentLocation();
   const handleDismissLocationPrompt = () => {
