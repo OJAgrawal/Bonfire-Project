@@ -6,4 +6,4 @@
   included_files = [".next/**", "public/**"]
 
 [[plugins]]
-  package = "@netlify/next"
+  package = "@netlify/plugin-nextjs"  # ✅ official plugin
