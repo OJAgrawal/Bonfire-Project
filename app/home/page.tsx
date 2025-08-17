@@ -9,9 +9,15 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/common/header";
 import { BottomNav } from "@/components/common/bottom-nav";
 import { EventCard } from "@/components/common/event-card";
-const EventMap = dynamic(() => import("@/components/map/event-map").then(m => m.EventMap), {
-  ssr: false,
-});
+const ClusteredFlameMap = dynamic(
+  () => import("@/components/map/ClusteredFlameMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[600px] w-full rounded-lg bg-muted/20 animate-pulse" />
+    ),
+  }
+);
 import { SearchInput } from "@/components/common/search-input";
 import { CategoryFilter } from "@/components/common/category-filter";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -35,7 +41,6 @@ export default function HomePage() {
   const router = useRouter();
   const { user, loading: authLoading, initialize } = useAuthStore();
   const {
-    events,
     loading,
     searchQuery,
     selectedCategory,
@@ -51,7 +56,8 @@ export default function HomePage() {
   const [showFilters, setShowFilters] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt" | null>(null);
+  const [locationPermission, setLocationPermission] =
+    useState<"granted" | "denied" | "prompt" | null>(null);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
   useEffect(() => {
@@ -69,7 +75,12 @@ export default function HomePage() {
       fetchEvents();
       checkLocationPermission();
     }
-  }, [user]);
+  }, [user, fetchEvents]);
+
+  // Warm the clustered map chunk so it’s ready when we render it
+  useEffect(() => {
+    import("@/components/map/ClusteredFlameMap");
+  }, []);
 
   const checkLocationPermission = async () => {
     if (!navigator.geolocation) {
@@ -79,7 +90,9 @@ export default function HomePage() {
 
     if (navigator.permissions && navigator.permissions.query) {
       try {
-        const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
+        const permissionStatus = await navigator.permissions.query({
+          name: "geolocation" as PermissionName,
+        });
         setLocationPermission(permissionStatus.state);
 
         if (permissionStatus.state === "granted") {
@@ -138,9 +151,10 @@ export default function HomePage() {
         }
       },
       {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        // Faster first fix; you can add a watchPosition later if you want refinement
+        enableHighAccuracy: false,
+        timeout: 4000,
+        maximumAge: 600000,
       }
     );
   };
@@ -191,7 +205,10 @@ export default function HomePage() {
               <MapPin className="h-5 w-5" />
               <div>
                 <p className="font-medium">Enable Location Access</p>
-                <p className="text-sm opacity-90">Allow access to discover nearby events and centre the map on you.</p>
+                <p className="text-sm opacity-90">
+                  Allow access to discover nearby events and centre the map on
+                  you.
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -201,7 +218,11 @@ export default function HomePage() {
                 className="bg-white text-orange-600 hover:bg-gray-100 font-medium"
                 size="sm"
               >
-                {locationLoading ? <LoadingSpinner size="sm" /> : "Allow Location"}
+                {locationLoading ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  "Allow Location"
+                )}
               </Button>
               <Button
                 onClick={handleDismissLocationPrompt}
@@ -243,7 +264,11 @@ export default function HomePage() {
                   variant={viewMode === "map" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("map")}
-                  className={cn("h-8 px-3 rounded-md", viewMode === "map" && "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow")}
+                  className={cn(
+                    "h-8 px-3 rounded-md",
+                    viewMode === "map" &&
+                      "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow"
+                  )}
                 >
                   <Map className="h-4 w-4" />
                 </Button>
@@ -251,7 +276,11 @@ export default function HomePage() {
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className={cn("h-8 px-3 rounded-md", viewMode === "list" && "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow")}
+                  className={cn(
+                    "h-8 px-3 rounded-md",
+                    viewMode === "list" &&
+                      "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow"
+                  )}
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -285,7 +314,8 @@ export default function HomePage() {
             </div>
 
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              {displayedEvents.length} event{displayedEvents.length !== 1 && "s"} found
+              {displayedEvents.length} event
+              {displayedEvents.length !== 1 && "s"} found
             </div>
           </div>
 
@@ -296,43 +326,53 @@ export default function HomePage() {
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <CategoryFilter selectedCategory={selectedCategory} onCategoryChange={setSelectedCategory} />
+              <CategoryFilter
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+              />
             </motion.div>
           )}
         </div>
 
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <LoadingSpinner size="lg" />
+        {/* ⬇️ Map now mounts regardless of loading/event count */}
+        {viewMode === "map" ? (
+          <div className="relative z-0 h-[600px] rounded-lg overflow-hidden shadow-lg">
+            <ClusteredFlameMap
+              events={displayedEvents}
+              onEventClick={handleEventClick}
+              userLocation={userLocation}
+            />
+            {loading && (
+              <div className="absolute inset-0 bg-background/40 backdrop-blur-sm animate-pulse pointer-events-none" />
+            )}
           </div>
-        )}
-
-        {!loading && displayedEvents.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🔥</div>
-            <h3 className="text-xl font-semibold mb-2">No events found</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Try adjusting your search or filters to find more events</p>
-            <Button
-              onClick={() => router.push("/organizer/create")}
-              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-            >
-              Create Your Own Event
-            </Button>
-          </div>
-        )}
-
-        {!loading && displayedEvents.length > 0 && (
+        ) : (
           <>
-            {viewMode === "map" ? (
-              <div className="relative z-0 h-[600px] rounded-lg overflow-hidden shadow-lg">
-                <EventMap
-                  events={displayedEvents}
-                  onEventClick={handleEventClick}
-                  userLocation={userLocation}
-                  className="h-full w-full"
-                />
+            {loading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-48 rounded-lg bg-muted/20 animate-pulse" />
+                ))}
               </div>
-            ) : (
+            )}
+
+            {!loading && displayedEvents.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🔥</div>
+                <h3 className="text-xl font-semibold mb-2">No events found</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Try adjusting your search or filters to find more events
+                </p>
+                <Button
+                  onClick={() => router.push("/organizer/create")}
+                  className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                >
+                  Create Your Own Event
+                </Button>
+              </div>
+            )}
+
+            {!loading && displayedEvents.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {displayedEvents.map((event) => (
                   <motion.div
