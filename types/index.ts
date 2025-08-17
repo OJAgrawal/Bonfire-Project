@@ -59,7 +59,8 @@ export type EventCategory =
   | 'networking'
   | 'outdoor'
   | 'technology'
-  | 'wellness';
+  | 'wellness'
+  | 'other';
 
 export type EventStatus = 'active' | 'cancelled' | 'completed';
 

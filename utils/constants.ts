@@ -9,6 +9,7 @@ export const EVENT_CATEGORIES = [
   { value: 'outdoor', label: 'Outdoor', icon: '🌲' },
   { value: 'technology', label: 'Technology', icon: '💻' },
   { value: 'wellness', label: 'Wellness', icon: '🧘' },
+  { value: 'other', label: 'Other', icon: '📝' },
 ] as const;
 
 export const CROWD_LEVELS = {
