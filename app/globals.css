@@ -80,3 +80,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+/* 🔥 Flame marker animation */
+.flame-div-icon .flame-wrap {
+  transform-origin: center bottom;
+  animation: flame-bob 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 2px 6px rgba(255,120,48,.65));
+}
+
+@keyframes flame-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1px) scale(1.03); }
+}
+
+/* 📍 User location pulse */
+.user-loc div {
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(0,122,255,.4); }
+  80%, 100% { box-shadow: 0 0 0 12px rgba(0,122,255,0); }
+}
