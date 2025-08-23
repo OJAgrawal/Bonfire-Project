@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -10,7 +11,8 @@ import { Header } from "@/components/common/header";
 import { BottomNav } from "@/components/common/bottom-nav";
 import { EventCard } from "@/components/common/event-card";
 
-import ClusteredFlameMap from "@/components/map/ClusteredFlameMap";
+const ClusteredFlameMap = dynamic(() => import("@/components/map/ClusteredFlameMap"), { ssr: false });
+import { SearchInput } from "@/components/common/search-input";
 import { CategoryFilter } from "@/components/common/category-filter";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
