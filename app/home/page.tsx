@@ -9,16 +9,8 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/common/header";
 import { BottomNav } from "@/components/common/bottom-nav";
 import { EventCard } from "@/components/common/event-card";
-const ClusteredFlameMap = dynamic(
-  () => import("@/components/map/ClusteredFlameMap"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-[600px] w-full rounded-lg bg-muted/20 animate-pulse" />
-    ),
-  }
-);
-import { SearchInput } from "@/components/common/search-input";
+
+import ClusteredFlameMap from "@/components/map/ClusteredFlameMap";
 import { CategoryFilter } from "@/components/common/category-filter";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
@@ -78,9 +70,7 @@ export default function HomePage() {
   }, [user, fetchEvents]);
 
   // Warm the clustered map chunk so it’s ready when we render it
-  useEffect(() => {
-    import("@/components/map/ClusteredFlameMap");
-  }, []);
+  
 
   const checkLocationPermission = async () => {
     if (!navigator.geolocation) {
