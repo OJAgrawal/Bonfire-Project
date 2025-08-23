@@ -1,3 +1,4 @@
+// components/ClusteredFlameMap.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,13 +8,14 @@ import supercluster from 'supercluster';
 import { point as turfPoint } from '@turf/helpers';
 import 'leaflet/dist/leaflet.css';
 import type { Event } from '@/types';
+import type { AnimationItem } from 'lottie-web';
 
 type UserLocation = { latitude: number; longitude: number } | null;
 
 /* ---------- Recenter helper ---------- */
 function RecenterOnLocation({
   userLocation,
-  behavior = 'once', // 'once' | 'follow'
+  behavior = 'once',
   minZoom = 14,
 }: {
   userLocation: UserLocation;
@@ -29,16 +31,12 @@ function RecenterOnLocation({
     if (!userLocation) return;
 
     const { latitude, longitude } = userLocation;
-
-    // avoid tiny jitter causing repeats
     if (
       lastLatRef.current !== null &&
       lastLngRef.current !== null &&
       Math.abs(lastLatRef.current - latitude) < 1e-5 &&
       Math.abs(lastLngRef.current - longitude) < 1e-5
-    ) {
-      return;
-    }
+    ) return;
 
     if (behavior === 'once' && didCenterRef.current) return;
 
@@ -53,51 +51,71 @@ function RecenterOnLocation({
   return null;
 }
 
-/* ---------- Flame icon (animated SVG) ---------- */
-function flameDivIcon(size: number, count?: number) {
+/* ---------- Lottie helpers ---------- */
+let lottieModule: any = null;
+const lottieCache = new WeakMap<HTMLElement, AnimationItem>();
+
+async function ensureLottie() {
+  if (!lottieModule) {
+    lottieModule = (await import('lottie-web/build/player/lottie_svg')).default;
+    lottieModule.setQuality('medium');
+  }
+  return lottieModule;
+}
+
+async function mountLottie(el: HTMLElement, animationData: any) {
+  if (!el || lottieCache.has(el) || !animationData) return;
+  const lottie = await ensureLottie();
+  const anim: AnimationItem = lottie.loadAnimation({
+    container: el,
+    renderer: 'svg',
+    loop: true,
+    autoplay: true,
+    animationData,
+    rendererSettings: { preserveAspectRatio: 'xMidYMid meet' },
+  });
+  lottieCache.set(el, anim);
+}
+
+function destroyLottie(el?: HTMLElement | null) {
+  if (!el) return;
+  const anim = lottieCache.get(el);
+  if (anim) {
+    anim.destroy();
+    lottieCache.delete(el);
+  }
+}
+
+function useFireAnimationData() {
+  const [data, setData] = useState<any>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/lottie/fire.json')
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setData(d);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return data;
+}
+
+function lottieDivIcon(id: string, size: number, badgeText?: number) {
   const s = Math.round(size);
   const badge =
-    typeof count === 'number'
-      ? `<div style="
-          position:absolute;right:-4px;top:-6px;
-          min-width:22px;height:22px;border-radius:9999px;
-          background:#111;color:#fff;display:flex;align-items:center;justify-content:center;
-          font-weight:700;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.3)
-        ">${count}</div>`
+    typeof badgeText === 'number'
+      ? `<div style="position:absolute;right:-4px;top:-6px;min-width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.3)">${badgeText}</div>`
       : '';
-
   return L.divIcon({
-    className: 'flame-div-icon',
+    className: 'lottie-fire-icon',
     iconSize: [s, s],
     iconAnchor: [s / 2, s - 6],
     html: `
-      <div class="flame-wrap" style="position:relative;width:${s}px;height:${s}px">
+      <div style="position:relative;width:${s}px;height:${s}px;will-change:transform">
         ${badge}
-        <svg viewBox="0 0 64 64" width="${s}" height="${s}" aria-hidden="true">
-          <defs>
-            <radialGradient id="g1" cx="50%" cy="20%" r="60%">
-              <stop offset="0%" stop-color="#fff6d5"/>
-              <stop offset="45%" stop-color="#ffcf6e"/>
-              <stop offset="80%" stop-color="#ff8a3d"/>
-              <stop offset="100%" stop-color="#ff6a2a"/>
-            </radialGradient>
-            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-          <path d="M32 60c12-6 18-14 18-24 0-10-6-16-8-24-2 4-8 8-10 14-2-4-6-8-10-12 0 10-8 14-8 22 0 10 6 18 18 24z"
-                fill="url(#g1)" filter="url(#glow)">
-            <animate attributeName="d" dur="1.5s" repeatCount="indefinite"
-              values="
-                M32 60c12-6 18-14 18-24 0-10-6-16-8-24-2 4-8 8-10 14-2-4-6-8-10-12 0 10-8 14-8 22 0 10 6 18 18 24z;
-                M32 60c12-7 18-13 18-25 0-9-6-16-8-24-2 5-8 8-10 14-2-4-6-9-10-12 0 11-8 14-8 22 0 10 6 18 18 25z;
-                M32 60c12-6 18-14 18-24 0-10-6-16-8-24-2 4-8 8-10 14-2-4-6-8-10-12 0 10-8 14-8 22 0 10 6 18 18 24z" />
-          </path>
-          <circle cx="32" cy="40" r="8" fill="#fff2c1" opacity="0.9">
-            <animate attributeName="r" values="6;9;7;6" dur="1.6s" repeatCount="indefinite" />
-          </circle>
-        </svg>
+        <div class="lottie-slot" data-id="${id}" style="width:${s}px;height:${s}px"></div>
       </div>
     `,
   });
@@ -107,17 +125,9 @@ function flameDivIcon(size: number, count?: number) {
 function useClusters(events: Event[], zoom: number, bounds: L.LatLngBounds) {
   const index = useMemo(() => {
     const pts = events
-      .filter(
-        (e) =>
-          typeof e.latitude === 'number' && typeof e.longitude === 'number'
-      )
+      .filter((e) => typeof e.latitude === 'number' && typeof e.longitude === 'number')
       .map((e) => turfPoint([e.longitude, e.latitude], { id: e.id, title: e.title }));
-
-    return new supercluster({
-      radius: 60,
-      maxZoom: 18,
-      minPoints: 2,
-    }).load(pts as any);
+    return new supercluster({ radius: 60, maxZoom: 18, minPoints: 2 }).load(pts as any);
   }, [events]);
 
   const bbox: [number, number, number, number] = [
@@ -135,6 +145,7 @@ function useClusters(events: Event[], zoom: number, bounds: L.LatLngBounds) {
   return { index, clusters };
 }
 
+/* ---------- Map content ---------- */
 function MapContent({
   events,
   onEventClick,
@@ -147,6 +158,26 @@ function MapContent({
   const map = useMap();
   const [zoom, setZoom] = useState<number>(map.getZoom());
   const [bounds, setBounds] = useState<L.LatLngBounds>(map.getBounds());
+  const { index, clusters } = useClusters(events, zoom, bounds);
+  const fireData = useFireAnimationData();
+
+  useEffect(() => {
+    const onZoomEnd = () => {
+      document.querySelectorAll<HTMLElement>('.lottie-slot').forEach((el) => {
+        const anim = lottieCache.get(el);
+        if (anim) {
+          anim.resize();
+          anim.play();
+        } else if (fireData) {
+          mountLottie(el, fireData);
+        }
+      });
+    };
+    map.on('zoomend', onZoomEnd);
+    return () => {
+      map.off('zoomend', onZoomEnd);
+    };
+  }, [map, fireData]);
 
   useEffect(() => {
     const onMove = () => {
@@ -159,7 +190,22 @@ function MapContent({
     };
   }, [map]);
 
-  const { index, clusters } = useClusters(events, zoom, bounds);
+  useEffect(() => {
+    if (!fireData) return;
+    requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('.lottie-slot').forEach((el) => {
+        if (!lottieCache.get(el)) mountLottie(el, fireData);
+      });
+    });
+  }, [fireData]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll<HTMLElement>('.lottie-slot').forEach((el) => {
+        if (!lottieCache.get(el) && fireData) mountLottie(el, fireData);
+      });
+    });
+  }, [clusters, fireData]);
 
   return (
     <>
@@ -169,22 +215,35 @@ function MapContent({
         if (c.properties.cluster) {
           const count = c.properties.point_count as number;
           const size = Math.min(84, 36 + Math.log2(count + 1) * 12);
-          const icon = flameDivIcon(size, count);
-
-          const handleClick = () => {
-            const expansionZoom = Math.min(
-              index.getClusterExpansionZoom(c.properties.cluster_id),
-              18
-            );
-            map.setView([lat, lng], expansionZoom, { animate: true });
-          };
+          const id = `cluster-${c.properties.cluster_id}`;
+          const icon = lottieDivIcon(id, size, count);
 
           return (
             <Marker
-              key={`cluster-${c.properties.cluster_id}`}
+              key={`${id}-${Math.round(zoom)}`}
               position={[lat, lng]}
               icon={icon}
-              eventHandlers={{ click: handleClick }}
+              eventHandlers={{
+                add: (e) => {
+                  const el = (e.target as any)?.getElement?.()?.querySelector?.(
+                    '.lottie-slot'
+                  ) as HTMLElement | null;
+                  if (el) mountLottie(el, fireData);
+                },
+                remove: (e) => {
+                  const el = (e.target as any)?.getElement?.()?.querySelector?.(
+                    '.lottie-slot'
+                  ) as HTMLElement | null;
+                  destroyLottie(el);
+                },
+                click: () => {
+                  const expansionZoom = Math.min(
+                    index.getClusterExpansionZoom(c.properties.cluster_id),
+                    18
+                  );
+                  map.setView([lat, lng], expansionZoom, { animate: true });
+                },
+              }}
             />
           );
         }
@@ -192,13 +251,29 @@ function MapContent({
         const ev = events.find((e) => e.id === c.properties.id);
         if (!ev) return null;
 
-        const icon = flameDivIcon(48);
+        const id = `event-${ev.id}`;
+        const icon = lottieDivIcon(id, 48);
+
         return (
           <Marker
-            key={ev.id}
+            key={`${id}-${Math.round(zoom)}`}
             position={[ev.latitude as number, ev.longitude as number]}
             icon={icon}
-            eventHandlers={{ click: () => onEventClick(ev) }}
+            eventHandlers={{
+              add: (e) => {
+                const el = (e.target as any)?.getElement?.()?.querySelector?.(
+                  '.lottie-slot'
+                ) as HTMLElement | null;
+                if (el) mountLottie(el, fireData);
+              },
+              remove: (e) => {
+                const el = (e.target as any)?.getElement?.()?.querySelector?.(
+                  '.lottie-slot'
+                ) as HTMLElement | null;
+                destroyLottie(el);
+              },
+              click: () => onEventClick(ev),
+            }}
           >
             <Popup>
               <div className="p-2">
@@ -236,9 +311,9 @@ export default function ClusteredFlameMap({
   onEventClick,
   userLocation,
   height = 600,
-  initialCenter = [12.9716, 77.5946] as [number, number], // fallback only
+  initialCenter = [12.9716, 77.5946] as [number, number],
   initialZoom = 12,
-  recenterBehavior = 'once', // 'once' | 'follow'
+  recenterBehavior = 'once',
 }: {
   events: Event[];
   onEventClick: (e: Event) => void;
@@ -250,25 +325,13 @@ export default function ClusteredFlameMap({
 }) {
   return (
     <div style={{ height, width: '100%', borderRadius: 12, overflow: 'hidden' }}>
-      <MapContainer
-        center={initialCenter}
-        zoom={initialZoom}
-        preferCanvas
-        className="h-full w-full"
-      >
+      <MapContainer center={initialCenter} zoom={initialZoom} className="h-full w-full">
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
-
-        {/* ⬇️ THIS does the centering as soon as userLocation arrives */}
         <RecenterOnLocation userLocation={userLocation} behavior={recenterBehavior} minZoom={14} />
-
-        <MapContent
-          events={events}
-          onEventClick={onEventClick}
-          userLocation={userLocation}
-        />
+        <MapContent events={events} onEventClick={onEventClick} userLocation={userLocation} />
       </MapContainer>
     </div>
   );
