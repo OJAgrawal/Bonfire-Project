@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import { Icon } from 'leaflet';
 import { Event, MapBounds } from '@/types';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '@/utils/constants';
 import { formatDate, formatTime } from '@/utils/helpers';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MapPin, Calendar, Clock, Users } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -14,18 +14,18 @@ import 'leaflet/dist/leaflet.css';
 // Fix for default markers
 delete (Icon.Default.prototype as any)._getIconUrl;
 Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+  iconUrl: '/leaflet/marker-icon.png',
+  shadowUrl: '/leaflet/marker-icon-shadow.png',
 });
 
-// Custom flame icon - Your exact logo
+// Custom flame icon
 const flameIcon = new Icon({
-  iconUrl: '/flame-icon.png', // Place your logo image in the public folder
+  iconUrl: '/flame-icon.png',
   iconSize: [64, 64],
   iconAnchor: [16, 30],
   popupAnchor: [0, -30],
-  className: 'flame-marker'
+  className: 'flame-marker',
 });
 
 interface UserLocation {
@@ -43,15 +43,20 @@ interface EventMapProps {
 
 // User location marker icon
 const userLocationIcon = new Icon({
-  iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4IiBmaWxsPSIjMzMzMyMzIiBmaWxsLW9wYWNpdHk9IjAuMiIvPgogIDxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiMwMDdBRkYiLz4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+  iconUrl:
+    'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4IiBmaWxsPSIjMzMzMyMzIiBmaWxsLW9wYWNpdHk9IjAuMiIvPgogIDxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjQiIGZpbGw9IiMwMDdBRkYiLz4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
   iconSize: [24, 24],
   iconAnchor: [12, 12],
   popupAnchor: [0, 0],
-  className: 'user-location-marker'
+  className: 'user-location-marker',
 });
 
-function MapEvents({ events, onEventClick, userLocation }: { 
-  events: Event[]; 
+function MapEvents({
+  events,
+  onEventClick,
+  userLocation,
+}: {
+  events: Event[];
   onEventClick: (event: Event) => void;
   userLocation?: UserLocation | null;
 }) {
@@ -59,11 +64,11 @@ function MapEvents({ events, onEventClick, userLocation }: {
 
   useEffect(() => {
     if (userLocation) {
-      // Center map on user location when available
       map.setView([userLocation.latitude, userLocation.longitude], 13);
     } else if (events.length > 0) {
-      // Fallback to fitting event bounds
-      const bounds = events.map(event => [event.latitude, event.longitude] as [number, number]);
+      const bounds = events.map(
+        (event) => [event.latitude, event.longitude] as [number, number]
+      );
       map.fitBounds(bounds, { padding: [20, 20] });
     }
   }, [events, map, userLocation]);
@@ -82,67 +87,75 @@ function MapEvents({ events, onEventClick, userLocation }: {
                 <MapPin className="h-4 w-4 text-blue-600" />
                 <span className="font-medium">Your Location</span>
               </div>
-              <p className="text-sm text-gray-600">
-                You are here
-              </p>
+              <p className="text-sm text-gray-600">You are here</p>
             </div>
           </Popup>
         </Marker>
       )}
-      
-      {/* Event markers */}
-      {events.map((event) => (
-        <Marker
-          key={event.id}
-          position={[event.latitude, event.longitude]}
-          icon={flameIcon}
-        >
-          <Popup className="min-w-[250px]">
-            <div className="p-2">
-              <h3 className="font-bold text-lg mb-2 line-clamp-2">{event.title}</h3>
-              
-              <div className="space-y-2 mb-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Calendar className="h-4 w-4" />
-                  <span>{formatDate(event.date)}</span>
+
+      {/* Clustered event markers */}
+      <MarkerClusterGroup chunkedLoading>
+        {events.map((event) => (
+          <Marker
+            key={event.id}
+            position={[event.latitude, event.longitude]}
+            icon={flameIcon}
+          >
+            <Popup className="min-w-[250px]">
+              <div className="p-2">
+                <h3 className="font-bold text-lg mb-2 line-clamp-2">
+                  {event.title}
+                </h3>
+
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Calendar className="h-4 w-4" />
+                    <span>{formatDate(event.date)}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock className="h-4 w-4" />
+                    <span>{formatTime(event.time)}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <MapPin className="h-4 w-4" />
+                    <span className="line-clamp-1">{event.location}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Users className="h-4 w-4" />
+                    <span>{event.attendees_count} going</span>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="h-4 w-4" />
-                  <span>{formatTime(event.time)}</span>
-                </div>
-                
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="h-4 w-4" />
-                  <span className="line-clamp-1">{event.location}</span>
-                </div>
-                
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Users className="h-4 w-4" />
-                  <span>{event.attendees_count} going</span>
-                </div>
+
+                <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                  {event.description}
+                </p>
+
+                <Button
+                  size="sm"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                  onClick={() => onEventClick(event)}
+                >
+                  View Details
+                </Button>
               </div>
-              
-              <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                {event.description}
-              </p>
-              
-              <Button
-                size="sm"
-                className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-                onClick={() => onEventClick(event)}
-              >
-                View Details
-              </Button>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+            </Popup>
+          </Marker>
+        ))}
+      </MarkerClusterGroup>
     </>
   );
 }
 
-export function EventMap({ events, onEventClick, onBoundsChange, userLocation, className }: EventMapProps) {
+export function EventMap({
+  events,
+  onEventClick,
+  onBoundsChange,
+  userLocation,
+  className,
+}: EventMapProps) {
   const mapRef = useRef<any>(null);
 
   const handleBoundsChange = () => {
@@ -157,7 +170,6 @@ export function EventMap({ events, onEventClick, onBoundsChange, userLocation, c
     }
   };
 
-  // Determine initial map center
   const getInitialCenter = (): [number, number] => {
     if (userLocation) {
       return [userLocation.latitude, userLocation.longitude];
@@ -183,9 +195,15 @@ export function EventMap({ events, onEventClick, onBoundsChange, userLocation, c
           animation: pulse 2s infinite;
         }
         @keyframes pulse {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-          100% { transform: scale(1); }
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+          }
         }
       `}</style>
       <MapContainer
@@ -203,8 +221,12 @@ export function EventMap({ events, onEventClick, onBoundsChange, userLocation, c
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        
-        <MapEvents events={events} onEventClick={onEventClick} userLocation={userLocation} />
+
+        <MapEvents
+          events={events}
+          onEventClick={onEventClick}
+          userLocation={userLocation}
+        />
       </MapContainer>
     </div>
   );
