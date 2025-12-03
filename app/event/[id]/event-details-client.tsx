@@ -54,7 +54,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
             setOrganizerName(event.organizer.name);
           } else if (event.organizer_id === user.id) {
             // If current user is the organizer
-            setOrganizerName(user.name || user.email || 'You');
+            setOrganizerName(user.user_metadata.name || user.email || 'You');
           } else {
             // You may need to fetch user profile here if you have a getUserById function
             // For now, we'll use a fallback
