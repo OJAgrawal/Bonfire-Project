@@ -39,33 +39,52 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
   const [isJoined, setIsJoined] = useState(false);
 
   useEffect(() => {
+    if (!eventId) return;
+
     const fetchAndCheckJoinStatus = async () => {
-      if (!eventId || !user) return;
+      setLoading(true);
+
       const event = await fetchEventById(eventId);
+
       if (event && user) {
         const joined = await hasJoinedEvent(event.id, user.id);
         setIsJoined(joined);
       }
+
       setLoading(false);
     };
 
     fetchAndCheckJoinStatus();
-  }, [eventId, fetchEventById, hasJoinedEvent, user]);
+  }, [eventId, user, fetchEventById, hasJoinedEvent]);
 
   const handleJoinEvent = async () => {
-    if (!user || !selectedEvent) return;
+    if (!user) {
+      toast.error('Please sign in to join events');
+      router.push('/login');
+      return;
+    }
+
+    if (!selectedEvent) return;
 
     try {
       if (isJoined) {
-        await leaveEvent(selectedEvent.id, user.id);
+        const success = await leaveEvent(selectedEvent.id, user.id);
+        if (!success) {
+          toast.error('Failed to update event attendance');
+          return;
+        }
         setIsJoined(false);
         toast.success('You have left the event');
       } else {
-        await joinEvent(selectedEvent.id, user.id);
+        const success = await joinEvent(selectedEvent.id, user.id);
+        if (!success) {
+          toast.error('Failed to update event attendance');
+          return;
+        }
         setIsJoined(true);
         toast.success('Successfully joined the event!');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update event attendance');
     }
   };
@@ -79,7 +98,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
         text: selectedEvent.description,
         url: window.location.href,
       });
-    } catch (error) {
+    } catch {
       navigator.clipboard.writeText(window.location.href);
       toast.success('Event link copied to clipboard!');
     }
@@ -119,7 +138,9 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
     );
   }
 
-  const category = EVENT_CATEGORIES.find(cat => cat.value === selectedEvent.category);
+  const category = EVENT_CATEGORIES.find(
+    cat => cat.value === selectedEvent.category
+  );
   const status = getEventStatus(selectedEvent);
 
   return (
@@ -127,7 +148,6 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
       <Header />
 
       <main className="pb-20 md:pb-6">
-        {/* Hero Image */}
         <div className="relative h-64 md:h-80 bg-gradient-to-r from-orange-400 to-red-500 overflow-hidden">
           {selectedEvent.image_url ? (
             <img
@@ -176,13 +196,14 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
               {selectedEvent.title}
             </h1>
 
-            {/* Event Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
                   <Calendar className="h-5 w-5" />
                   <div>
-                    <p className="font-medium">{formatDate(selectedEvent.date)}</p>
+                    <p className="font-medium">
+                      {formatDate(selectedEvent.date)}
+                    </p>
                     <p className="text-sm">Date</p>
                   </div>
                 </div>
@@ -190,7 +211,9 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                 <div className="flex items-center gap-3 text-gray-600 dark:text-gray-400">
                   <Clock className="h-5 w-5" />
                   <div>
-                    <p className="font-medium">{formatTime(selectedEvent.time)}</p>
+                    <p className="font-medium">
+                      {formatTime(selectedEvent.time)}
+                    </p>
                     <p className="text-sm">Time</p>
                   </div>
                 </div>
@@ -200,7 +223,8 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                   <div>
                     <p className="font-medium">
                       {selectedEvent.attendees_count} going
-                      {selectedEvent.max_attendees && ` / ${selectedEvent.max_attendees} max`}
+                      {selectedEvent.max_attendees &&
+                        ` / ${selectedEvent.max_attendees} max`}
                     </p>
                     <p className="text-sm">Attendees</p>
                   </div>
@@ -235,7 +259,9 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                 </Avatar>
                 <div>
                   <p className="font-medium">{selectedEvent.organizer.name}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Event Organizer</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Event Organizer
+                  </p>
                 </div>
               </div>
             )}
@@ -269,7 +295,11 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
               </Button>
 
               {isJoined && (
-                <Button variant="outline" className="flex-1" onClick={handleCheckIn}>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCheckIn}
+                >
                   <QrCode className="h-4 w-4 mr-2" />
                   Check In
                 </Button>
