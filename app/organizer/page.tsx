@@ -6,12 +6,14 @@ import { motion } from 'framer-motion';
 import { Header } from '@/components/common/header';
 import { BottomNav } from '@/components/common/bottom-nav';
 import { EventCard } from '@/components/common/event-card';
+import { SearchInput } from '@/components/common/search-input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/store/authStore';
 import { useEventStore } from '@/store/eventStore';
 import { Plus, Calendar, Users, TrendingUp, Edit, Trash2 } from 'lucide-react';
+import { isEventUpcoming } from '@/utils/helpers';
 import { toast } from 'sonner';
 
 export default function OrganizerPage() {
@@ -19,9 +21,22 @@ export default function OrganizerPage() {
   const { user } = useAuthStore();
   const { events, fetchEvents, deleteEvent } = useEventStore();
   const [loading, setLoading] = useState(true);
+  const [organizerSearch, setOrganizerSearch] = useState('');
 
   // Filter events organized by current user
   const myEvents = events.filter(event => event.organizer_id === user?.id);
+
+  // Local filtered list for organizer search
+  const filteredMyEvents = myEvents.filter(event => {
+    const q = organizerSearch.trim().toLowerCase();
+    if (!q) return true;
+    const inText =
+      event.title.toLowerCase().includes(q) ||
+      event.description.toLowerCase().includes(q) ||
+      event.location.toLowerCase().includes(q);
+    const inTags = event.tags?.some(tag => tag.toLowerCase().includes(q));
+    return inText || inTags;
+  });
 
   useEffect(() => {
     if (user) {
@@ -43,7 +58,8 @@ export default function OrganizerPage() {
   const stats = {
     totalEvents: myEvents.length,
     totalAttendees: myEvents.reduce((sum, event) => sum + event.attendees_count, 0),
-    activeEvents: myEvents.filter(event => event.status === 'active').length,
+    // activeEvents: only count events with status 'active' that are still upcoming
+    activeEvents: myEvents.filter(event => event.status === 'active' && isEventUpcoming(event.date, event.time)).length,
   };
 
   if (loading) {
@@ -124,12 +140,22 @@ export default function OrganizerPage() {
 
           {/* Events List */}
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Your Events</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {myEvents.length} event{myEvents.length !== 1 ? 's' : ''}
-              </p>
-            </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold">Your Events</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {filteredMyEvents.length} of {myEvents.length} event{myEvents.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                <div className="w-full md:w-1/3">
+                  <SearchInput
+                    value={organizerSearch}
+                    onChange={setOrganizerSearch}
+                    placeholder="Search your events..."
+                  />
+                </div>
+              </div>
 
             {myEvents.length === 0 ? (
               <div className="text-center py-12">
@@ -146,9 +172,22 @@ export default function OrganizerPage() {
                   Create Your First Event
                 </Button>
               </div>
+            ) : filteredMyEvents.length === 0 ? (
+              <div className="text-center py-12">
+                <h3 className="text-xl font-semibold mb-2">No events match</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Try adjusting your search to find your events
+                </p>
+                <Button
+                  onClick={() => setOrganizerSearch('')}
+                  className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                >
+                  Clear Search
+                </Button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {myEvents.map((event) => (
+                {filteredMyEvents.map((event) => (
                   <motion.div
                     key={event.id}
                     initial={{ opacity: 0, y: 20 }}

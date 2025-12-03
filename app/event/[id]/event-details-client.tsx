@@ -37,6 +37,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
   } = useEventStore();
   const [loading, setLoading] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
+  const [organizerName, setOrganizerName] = useState<string>('');
 
   useEffect(() => {
     if (!eventId) return;
@@ -49,6 +50,21 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
       if (event && user) {
         const joined = await hasJoinedEvent(event.id, user.id);
         setIsJoined(joined);
+        
+        // Fetch organizer name
+        if (event.organizer_id) {
+          // Try to get from organizer object first
+          if (event.organizer?.name) {
+            setOrganizerName(event.organizer.name);
+          } else if (event.organizer_id === user.id) {
+            // If current user is the organizer
+            setOrganizerName(user.user_metadata.name || user.email || 'You');
+          } else {
+            // You may need to fetch user profile here if you have a getUserById function
+            // For now, we'll use a fallback
+            setOrganizerName('Event Organizer');
+          }
+        }
       }
 
       setLoading(false);
@@ -231,21 +247,42 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 text-gray-600 dark:text-gray-400">
-                <MapPin className="h-5 w-5 mt-1" />
-                <div>
-                  <p className="font-medium">{selectedEvent.location}</p>
-                  <p className="text-sm">Location</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={handleGetDirections}
-                  >
-                    <Navigation className="h-4 w-4 mr-2" />
-                    Get Directions
-                  </Button>
+              {/* Map Preview */}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 text-gray-600 dark:text-gray-400">
+                  <MapPin className="h-5 w-5 mt-1" />
+                  <div className="flex-1">
+                    <p className="font-medium">{selectedEvent.location}</p>
+                    <p className="text-sm">Location</p>
+                  </div>
                 </div>
+                
+                {/* Interactive Map Preview */}
+                <div className="relative w-full h-48 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    style={{ border: 0 }}
+                    src={`https://www.google.com/maps/embed/v1/place?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY'}&q=${selectedEvent.latitude},${selectedEvent.longitude}&zoom=15`}
+                    allowFullScreen
+                  />
+                  {/* Overlay to prevent interaction (optional) */}
+                  <div 
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={handleGetDirections}
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleGetDirections}
+                >
+                  <Navigation className="h-4 w-4 mr-2" />
+                  Get Directions
+                </Button>
               </div>
             </div>
 
@@ -265,7 +302,6 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                 </div>
               </div>
             )}
-
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 border">
               <h2 className="text-xl font-semibold mb-3">About This Event</h2>
               <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -305,6 +341,18 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
                 </Button>
               )}
             </div>
+
+            {/* Organizer Footer */}
+            {organizerName && (
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                  Organized by{' '}
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {organizerName}
+                  </span>
+                </p>
+              </div>
+            )}
           </motion.div>
         </div>
       </main>

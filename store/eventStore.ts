@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Event, EventCategory, MapBounds } from '@/types';
 import { db } from '@/utils/supabase';
+import { isEventUpcoming } from '@/utils/helpers';
 
 interface EventState {
   events: Event[];
@@ -8,9 +9,12 @@ interface EventState {
   loading: boolean;
   searchQuery: string;
   selectedCategory: EventCategory | null;
+  selectedTags: string[];
+  dateSort: 'newest' | 'oldest' | null;
   mapBounds: MapBounds | null;
   viewMode: 'map' | 'list';
   hasJoinedMap: Record<string, boolean>;
+
 
   fetchEvents: (bounds?: MapBounds) => Promise<void>;
   fetchEventById: (id: string) => Promise<Event | null>;
@@ -23,6 +27,8 @@ interface EventState {
 
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (category: EventCategory | null) => void;
+  setSelectedTags: (tags: string[]) => void;
+  setDateSort: (sort: 'newest' | 'oldest' | null) => void;
   setMapBounds: (bounds: MapBounds | null) => void;
   setViewMode: (mode: 'map' | 'list') => void;
   setSelectedEvent: (event: Event | null) => void;
@@ -36,6 +42,8 @@ export const useEventStore = create<EventState>((set, get) => ({
   loading: false,
   searchQuery: '',
   selectedCategory: null,
+  selectedTags: [],
+  dateSort: 'newest',
   mapBounds: null,
   viewMode: 'map',
   hasJoinedMap: {},
@@ -239,14 +247,20 @@ export const useEventStore = create<EventState>((set, get) => ({
 
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedCategory: (category) => set({ selectedCategory: category }),
+  setSelectedTags: (tags) => set({ selectedTags: tags }),
+  setDateSort: (sort) => set({ dateSort: sort }),
   setMapBounds: (bounds) => set({ mapBounds: bounds }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setSelectedEvent: (event) => set({ selectedEvent: event }),
 
   filteredEvents: () => {
-    const { events, searchQuery, selectedCategory } = get();
+    const { events, searchQuery, selectedCategory, selectedTags, dateSort } = get();
 
-    return events.filter(event => {
+    const filtered = events.filter(event => {
+      if (!isEventUpcoming(event.date, event.time)) {
+        return false;
+      }
+
       const matchesSearch =
         searchQuery === '' ||
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -256,7 +270,21 @@ export const useEventStore = create<EventState>((set, get) => ({
       const matchesCategory =
         selectedCategory === null || event.category === selectedCategory;
 
-      return matchesSearch && matchesCategory;
+      const matchesTags = selectedTags.length === 0 ||
+        // include event if it has at least one of the selected tags
+        event.tags.some(tag => selectedTags.includes(tag));
+
+      return matchesSearch && matchesCategory && matchesTags;
     });
+
+    // Sort by date based on `dateSort`. Default to newest first.
+    const sorter = (a: any, b: any) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      if (dateSort === 'oldest') return aTime - bTime;
+      return bTime - aTime;
+    };
+
+    return filtered.sort(sorter);
   },
 }));

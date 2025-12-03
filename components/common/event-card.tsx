@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Event } from '@/types';
-import { formatDate, formatTime, getEventStatus } from '@/utils/helpers';
+import { formatDate, formatTime, getEventStatus, isEventUpcoming } from '@/utils/helpers';
 import { EVENT_CATEGORIES } from '@/utils/constants';
 import { 
   MapPin, 
@@ -38,6 +38,7 @@ export function EventCard({
   const [isLiked, setIsLiked] = useState(false);
   const category = EVENT_CATEGORIES.find(cat => cat.value === event.category);
   const status = getEventStatus(event);
+  const canJoin = event.status === 'active' && isEventUpcoming(event.date, event.time);
 
   return (
     <motion.div
@@ -161,21 +162,27 @@ export function EventCard({
             </div>
           )}
           
-          {/* Join Button */}
-          <Button
-            className={cn(
-              "w-full transition-all duration-200",
-              isJoined 
-                ? "bg-green-500 hover:bg-green-600 text-white" 
-                : "bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              isJoined ? onLeave?.() : onJoin?.();
-            }}
-          >
-            {isJoined ? 'Joined' : 'Join Event'}
-          </Button>
+          {/* Join Button (hidden if event ended/cancelled/completed) */}
+          {canJoin ? (
+            <Button
+              className={cn(
+                "w-full transition-all duration-200",
+                isJoined
+                  ? "bg-green-500 hover:bg-green-600 text-white"
+                  : "bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                isJoined ? onLeave?.() : onJoin?.();
+              }}
+            >
+              {isJoined ? 'Joined' : 'Join Event'}
+            </Button>
+          ) : (
+            <div className="w-full text-center py-2 text-sm text-muted-foreground">
+              {status === 'Cancelled' ? 'Event cancelled' : status === 'Completed' ? 'Event completed' : 'Event ended'}
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>

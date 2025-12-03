@@ -11,6 +11,8 @@ import {
   LogOut,
   User,
   Menu,  
+  Search,
+  Plus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -82,6 +84,24 @@ export function Header() {
             className="hidden md:flex"
           >
             <Bell className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/home')}
+            className="hidden md:flex"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/organizer/create')}
+            className="hidden md:flex"
+          >
+            <Plus className="h-5 w-5" />
           </Button>
 
           {/* User Menu */}
