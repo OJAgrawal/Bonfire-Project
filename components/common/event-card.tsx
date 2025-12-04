@@ -5,6 +5,9 @@ import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/authStore';
+import { Edit } from 'lucide-react';
 import { Event } from '@/types';
 import { formatDate, formatTime, getEventStatus, isEventUpcoming } from '@/utils/helpers';
 import { EVENT_CATEGORIES } from '@/utils/constants';
@@ -35,6 +38,8 @@ export function EventCard({
   isJoined = false,
   className 
 }: EventCardProps) {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [isLiked, setIsLiked] = useState(false);
   const category = EVENT_CATEGORIES.find(cat => cat.value === event.category);
   const status = getEventStatus(event);
@@ -99,6 +104,20 @@ export function EventCard({
             >
               <Share2 className="h-4 w-4 text-white" />
             </Button>
+            {/* Edit button visible to organizer only */}
+            {user && user.id === event.organizer_id && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8 w-8 rounded-full p-0 bg-white/20 backdrop-blur-sm hover:bg-white/30"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/organizer/edit/${event.id}`);
+                }}
+              >
+                <Edit className="h-4 w-4 text-white" />
+              </Button>
+            )}
           </div>
           
           {/* Category Badge */}
@@ -114,7 +133,7 @@ export function EventCard({
 
         <CardContent className="p-4">
           {/* Event Title */}
-          <h3 className="font-bold text-lg mb-2 line-clamp-2 text-gray-900 dark:text-white">
+          <h3 className="font-bold text-lg mb-2 line-clamp-2 text-gray-900 dark:text-white break-words whitespace-normal">
             {event.title}
           </h3>
           
@@ -142,7 +161,7 @@ export function EventCard({
           </div>
           
           {/* Description */}
-          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 break-words whitespace-normal">
             {event.description}
           </p>
           

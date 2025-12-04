@@ -15,11 +15,10 @@ interface EventState {
   viewMode: 'map' | 'list';
   hasJoinedMap: Record<string, boolean>;
 
-
   fetchEvents: (bounds?: MapBounds) => Promise<void>;
   fetchEventById: (id: string) => Promise<Event | null>;
   createEvent: (event: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => Promise<Event>;
-  updateEvent: (id: string, updates: Partial<Event>) => Promise<void>;
+  updateEvent: (id: string, updates: Partial<Event>) => Promise<Event | null>;
   deleteEvent: (id: string) => Promise<void>;
   joinEvent: (eventId: string, userId: string) => Promise<boolean>;
   leaveEvent: (eventId: string, userId: string) => Promise<boolean>;
@@ -53,10 +52,12 @@ export const useEventStore = create<EventState>((set, get) => ({
     try {
       let query = db
         .from('events')
-        .select(`
+        .select(
+          `
           *,
           organizer:profiles!events_organizer_id_fkey(*)
-        `)
+        `
+        )
         .eq('status', 'active');
 
       if (bounds) {
@@ -70,7 +71,7 @@ export const useEventStore = create<EventState>((set, get) => ({
       const { data, error } = await query;
       if (error) throw error;
 
-      set({ events: data || [] });
+      set({ events: (data as Event[]) || [] });
     } catch (error: any) {
       console.error('Error fetching events:', error?.message || error);
       set({ events: [] });
@@ -83,17 +84,19 @@ export const useEventStore = create<EventState>((set, get) => ({
     try {
       const { data, error } = await db
         .from('events')
-        .select(`
+        .select(
+          `
           *,
           organizer:profiles!events_organizer_id_fkey(*)
-        `)
+        `
+        )
         .eq('id', id)
         .single();
 
       if (error) throw error;
 
-      set({ selectedEvent: data });
-      return data;
+      set({ selectedEvent: data as Event });
+      return data as Event;
     } catch (error) {
       console.error('Error fetching event:', error);
       return null;
@@ -104,7 +107,12 @@ export const useEventStore = create<EventState>((set, get) => ({
     const { data, error } = await db
       .from('events')
       .insert(eventData)
-      .select()
+      .select(
+        `
+        *,
+        organizer:profiles!events_organizer_id_fkey(*)
+      `
+      )
       .single();
 
     if (error) {
@@ -112,26 +120,51 @@ export const useEventStore = create<EventState>((set, get) => ({
       throw error;
     }
 
-    set(state => ({ events: [...state.events, data] }));
-    return data;
+    set(state => ({ events: [...state.events, data as Event] }));
+    return data as Event;
   },
 
   updateEvent: async (id, updates) => {
-    const { error } = await db
-      .from('events')
-      .update(updates)
-      .eq('id', id);
+    try {
+      console.log('Updating event:', id, updates);
+      const { error } = await db
+        .from('events')
+        .update(updates)
+        .eq('id', id);
 
-    if (error) {
+      if (error) {
+        console.error('Error updating event:', error);
+        throw error;
+      }
+
+      console.log('Update successful, re-fetching event...');
+      // Re-fetch the event with related organizer to ensure consistent shape
+      const updated = await get().fetchEventById(id);
+
+      if (!updated) {
+        throw new Error('Updated event not found after update.');
+      }
+
+      console.log('Updated event fetched:', updated);
+      set(state => ({
+        events: state.events.map(event => (event.id === id ? updated : event)),
+        selectedEvent: state.selectedEvent?.id === id ? updated : state.selectedEvent,
+      }));
+      console.log('Store updated with new event data');
+
+      // Refresh the public events list so other views reflect the update
+      try {
+        await get().fetchEvents();
+        console.log('Events list refreshed after update');
+      } catch (err) {
+        console.warn('Failed to refresh events after update', err);
+      }
+
+      return updated;
+    } catch (error) {
       console.error('Error updating event:', error);
       throw error;
     }
-
-    set(state => ({
-      events: state.events.map(event =>
-        event.id === id ? { ...event, ...updates } : event
-      )
-    }));
   },
 
   deleteEvent: async (id) => {
@@ -146,7 +179,8 @@ export const useEventStore = create<EventState>((set, get) => ({
     }
 
     set(state => ({
-      events: state.events.filter(event => event.id !== id)
+      events: state.events.filter(event => event.id !== id),
+      selectedEvent: state.selectedEvent?.id === id ? null : state.selectedEvent,
     }));
   },
 
@@ -159,17 +193,21 @@ export const useEventStore = create<EventState>((set, get) => ({
       .insert({ event_id: eventId, user_id: userId });
 
     if (error) {
-      console.error('Join event error:', error.message, error.details, error.hint);
+      console.error('Join event error:', error);
       return false;
     }
 
+    const updated = await get().fetchEventById(eventId);
+
     set(state => ({
       events: state.events.map(event =>
-        event.id === eventId
-          ? { ...event, attendees_count: event.attendees_count + 1 }
-          : event
+        event.id === eventId && updated ? updated : event
       ),
-      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: true }
+      selectedEvent:
+        state.selectedEvent?.id === eventId && updated
+          ? updated
+          : state.selectedEvent,
+      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: true },
     }));
 
     return true;
@@ -187,13 +225,17 @@ export const useEventStore = create<EventState>((set, get) => ({
       return false;
     }
 
+    const updated = await get().fetchEventById(eventId);
+
     set(state => ({
       events: state.events.map(event =>
-        event.id === eventId
-          ? { ...event, attendees_count: Math.max(0, event.attendees_count - 1) }
-          : event
+        event.id === eventId && updated ? updated : event
       ),
-      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: false }
+      selectedEvent:
+        state.selectedEvent?.id === eventId && updated
+          ? updated
+          : state.selectedEvent,
+      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: false },
     }));
 
     return true;
@@ -213,7 +255,7 @@ export const useEventStore = create<EventState>((set, get) => ({
     }
 
     set(state => ({
-      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: !!data }
+      hasJoinedMap: { ...state.hasJoinedMap, [eventId]: !!data },
     }));
 
     return !!data;
@@ -231,28 +273,27 @@ export const useEventStore = create<EventState>((set, get) => ({
     const { events, searchQuery, selectedCategory, selectedTags, dateSort } = get();
 
     const filtered = events.filter(event => {
-      // Hide ended events from home page (only organizers see their ended events in dashboard)
       if (!isEventUpcoming(event.date, event.time)) {
         return false;
       }
 
-      const matchesSearch = searchQuery === '' ||
+      const matchesSearch =
+        searchQuery === '' ||
         event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.location.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesCategory = selectedCategory === null ||
-        event.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === null || event.category === selectedCategory;
 
-      const matchesTags = selectedTags.length === 0 ||
-        // include event if it has at least one of the selected tags
+      const matchesTags =
+        selectedTags.length === 0 ||
         event.tags.some(tag => selectedTags.includes(tag));
 
       return matchesSearch && matchesCategory && matchesTags;
     });
 
-    // Sort by date based on `dateSort`. Default to newest first.
-    const sorter = (a: any, b: any) => {
+    const sorter = (a: Event, b: Event) => {
       const aTime = new Date(a.created_at).getTime();
       const bTime = new Date(b.created_at).getTime();
       if (dateSort === 'oldest') return aTime - bTime;

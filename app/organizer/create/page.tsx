@@ -33,7 +33,8 @@ export default function CreateEventPage() {
     longitude: 75.8022,
     date: '',
     time: '',
-    duration: 120,
+    end_date: '',
+    end_time: '',
     category: '' as EventCategory,
     max_attendees: '',
     tags: '',
@@ -59,14 +60,33 @@ export default function CreateEventPage() {
     setLoading(true);
 
     try {
+      // Calculate duration in minutes
+      const startDateTime = new Date(`${formData.date}T${formData.time}`);
+      const endDateTime = new Date(`${formData.end_date}T${formData.end_time}`);
+      const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60));
+
+      if (durationMinutes <= 0) {
+        toast.error('End time must be after start time');
+        setLoading(false);
+        return;
+      }
+
       const tagsArray = formData.tags
         .split(',')
         .map(tag => tag.trim())
         .filter(tag => tag.length > 0);
 
       await createEvent({
-        ...formData,
-        organizer_id: user.id, // ✅ safe now
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        date: formData.date,
+        time: formData.time,
+        duration: durationMinutes,
+        category: formData.category,
+        organizer_id: user.id,
         max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : undefined,
         attendees_count: 0,
         tags: tagsArray,
@@ -119,24 +139,36 @@ export default function CreateEventPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Title */}
                   <div className="space-y-2">
-                    <Label htmlFor="title">Event Title *</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="title">Event Title *</Label>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {formData.title.length}/48
+                      </span>
+                    </div>
                     <Input
                       id="title"
                       placeholder="Enter event title"
                       value={formData.title}
-                      onChange={(e) => handleChange('title', e.target.value)}
+                      onChange={(e) => handleChange('title', e.target.value.slice(0, 48))}
+                      maxLength={48}
                       required
                     />
                   </div>
 
                   {/* Description */}
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description *</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="description">Description *</Label>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {formData.description.length}/2000
+                      </span>
+                    </div>
                     <Textarea
                       id="description"
                       placeholder="Describe your event..."
                       value={formData.description}
-                      onChange={(e) => handleChange('description', e.target.value)}
+                      onChange={(e) => handleChange('description', e.target.value.slice(0, 2000))}
+                      maxLength={2000}
                       rows={4}
                       required
                     />
@@ -193,13 +225,14 @@ export default function CreateEventPage() {
                     <div className="space-y-2">
                       <Label htmlFor="date">
                         <Calendar className="inline h-4 w-4 mr-1" />
-                        Date *
+                        Start Date *
                       </Label>
                       <Input
                         id="date"
                         type="date"
                         value={formData.date}
                         onChange={(e) => handleChange('date', e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
                         required
                       />
                     </div>
@@ -207,7 +240,7 @@ export default function CreateEventPage() {
                     <div className="space-y-2">
                       <Label htmlFor="time">
                         <Clock className="inline h-4 w-4 mr-1" />
-                        Time *
+                        Start Time *
                       </Label>
                       <Input
                         id="time"
@@ -219,35 +252,52 @@ export default function CreateEventPage() {
                     </div>
                   </div>
 
-                  {/* Duration and Max Attendees */}
+                  {/* End Date and Time */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="duration">Duration (minutes)</Label>
+                      <Label htmlFor="end_date">
+                        <Calendar className="inline h-4 w-4 mr-1" />
+                        End Date *
+                      </Label>
                       <Input
-                        id="duration"
-                        type="number"
-                        placeholder="120"
-                        value={formData.duration}
-                        onChange={(e) => handleChange('duration', e.target.value)}
-                        min="30"
-                        max="480"
+                        id="end_date"
+                        type="date"
+                        value={formData.end_date}
+                        onChange={(e) => handleChange('end_date', e.target.value)}
+                        min={formData.date || new Date().toISOString().split('T')[0]}
+                        required
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="max_attendees">
-                        <Users className="inline h-4 w-4 mr-1" />
-                        Max Attendees
+                      <Label htmlFor="end_time">
+                        <Clock className="inline h-4 w-4 mr-1" />
+                        End Time *
                       </Label>
                       <Input
-                        id="max_attendees"
-                        type="number"
-                        placeholder="No limit"
-                        value={formData.max_attendees}
-                        onChange={(e) => handleChange('max_attendees', e.target.value)}
-                        min="1"
+                        id="end_time"
+                        type="time"
+                        value={formData.end_time}
+                        onChange={(e) => handleChange('end_time', e.target.value)}
+                        required
                       />
                     </div>
+                  </div>
+
+                  {/* Max Attendees */}
+                  <div className="space-y-2">
+                    <Label htmlFor="max_attendees">
+                      <Users className="inline h-4 w-4 mr-1" />
+                      Max Attendees
+                    </Label>
+                    <Input
+                      id="max_attendees"
+                      type="number"
+                      placeholder="No limit"
+                      value={formData.max_attendees}
+                      onChange={(e) => handleChange('max_attendees', e.target.value)}
+                      min="1"
+                    />
                   </div>
 
                   {/* Tags */}

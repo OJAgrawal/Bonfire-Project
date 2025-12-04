@@ -113,9 +113,9 @@ export default function HelpPage() {
                 <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
                   <MessageCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
-                <h3 className="font-semibold mb-2">Live Chat</h3>
+                <h3 className="font-semibold mb-2">Live Chat not available</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Chat with our support team
+                  Do not Chat with our support team
                 </p>
               </CardContent>
             </Card>
@@ -251,11 +251,11 @@ export default function HelpPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-gray-500" />
-                <span className="text-sm">bonfire-app@gmail.com</span>
+                <span className="text-sm">bonfireglobal@gmail.com</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-gray-500" />
-                <span className="text-sm">+91 925718476</span>
+                <span className="text-sm">+91 9257184876, +91 9257317811</span>
               </div>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/common/header';
 import { BottomNav } from '@/components/common/bottom-nav';
-import { CrowdBadge } from '@/components/common/crowd-badge';
+// Crowd badge removed per request
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ import {
   Share2,
   Navigation,
   QrCode,
+  Edit,
 } from 'lucide-react';
 
 export default function EventDetailsClient({ eventId }: { eventId: string }) {
@@ -41,8 +42,17 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     const fetchAndCheckJoinStatus = async () => {
+      console.log('Event details page: fetching event', eventId);
       if (!eventId || !user) return;
       const event = await fetchEventById(eventId);
+      console.log('Event details page: fetched event', event);
+      try {
+        // force app-router to refresh server data so any SSR/SC caches update
+        router.refresh();
+        console.log('Router refreshed after fetching event');
+      } catch (e) {
+        console.debug('router.refresh not available or failed', e);
+      }
       if (event && user) {
         const joined = await hasJoinedEvent(event.id, user.id);
         setIsJoined(joined);
@@ -66,7 +76,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
     };
 
     fetchAndCheckJoinStatus();
-  }, [eventId, fetchEventById, hasJoinedEvent, user]);
+  }, [eventId, user, fetchEventById, hasJoinedEvent]);
 
   const handleJoinEvent = async () => {
     if (!user || !selectedEvent) return;
@@ -166,6 +176,16 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
           </div>
 
           <div className="absolute top-4 right-4 flex gap-2">
+            {user && selectedEvent.organizer_id === user.id && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-10 w-10 rounded-full p-0 bg-white/20 backdrop-blur-sm hover:bg-white/30"
+                onClick={() => router.push(`/organizer/edit/${selectedEvent.id}`)}
+              >
+                <Edit className="h-4 w-4 text-white" />
+              </Button>
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -176,9 +196,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
             </Button>
           </div>
 
-          <div className="absolute bottom-4 left-4">
-            <CrowdBadge event={selectedEvent} />
-          </div>
+          {/* Crowd badge removed */}
         </div>
 
         <div className="container mx-auto px-4 py-6">
@@ -188,7 +206,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
             transition={{ duration: 0.5 }}
             className="max-w-4xl mx-auto"
           >
-            <h1 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
+            <h1 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white break-words whitespace-normal">
               {selectedEvent.title}
             </h1>
 
@@ -264,7 +282,7 @@ export default function EventDetailsClient({ eventId }: { eventId: string }) {
 
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 border">
               <h2 className="text-xl font-semibold mb-3">About This Event</h2>
-              <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+              <p className="text-gray-600 dark:text-gray-400 leading-relaxed break-words whitespace-pre-wrap">
                 {selectedEvent.description}
               </p>
             </div>
