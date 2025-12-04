@@ -15,7 +15,6 @@ interface EventState {
   viewMode: 'map' | 'list';
   hasJoinedMap: Record<string, boolean>;
 
-
   fetchEvents: (bounds?: MapBounds) => Promise<void>;
   fetchEventById: (id: string) => Promise<Event | null>;
   createEvent: (event: Omit<Event, 'id' | 'created_at' | 'updated_at'>) => Promise<Event>;
@@ -270,15 +269,14 @@ export const useEventStore = create<EventState>((set, get) => ({
       const matchesCategory =
         selectedCategory === null || event.category === selectedCategory;
 
-      const matchesTags = selectedTags.length === 0 ||
-        // include event if it has at least one of the selected tags
+      const matchesTags =
+        selectedTags.length === 0 ||
         event.tags.some(tag => selectedTags.includes(tag));
 
       return matchesSearch && matchesCategory && matchesTags;
     });
 
-    // Sort by date based on `dateSort`. Default to newest first.
-    const sorter = (a: any, b: any) => {
+    const sorter = (a: Event, b: Event) => {
       const aTime = new Date(a.created_at).getTime();
       const bTime = new Date(b.created_at).getTime();
       if (dateSort === 'oldest') return aTime - bTime;

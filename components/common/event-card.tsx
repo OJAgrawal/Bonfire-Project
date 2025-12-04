@@ -114,7 +114,7 @@ export function EventCard({
 
         <CardContent className="p-4">
           {/* Event Title */}
-          <h3 className="font-bold text-lg mb-2 line-clamp-2 text-gray-900 dark:text-white">
+          <h3 className="font-bold text-lg mb-2 line-clamp-2 text-gray-900 dark:text-white break-words whitespace-normal">
             {event.title}
           </h3>
           
@@ -142,7 +142,7 @@ export function EventCard({
           </div>
           
           {/* Description */}
-          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4 break-words whitespace-normal">
             {event.description}
           </p>
           

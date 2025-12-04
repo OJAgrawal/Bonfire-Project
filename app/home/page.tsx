@@ -50,6 +50,9 @@ export default function HomePage() {
     setSelectedCategory,
     setViewMode,
     joinEvent,
+    leaveEvent,
+    hasJoinedEvent,
+    hasJoinedMap,
     filteredEvents,
     events,
     selectedTags,
@@ -81,6 +84,14 @@ export default function HomePage() {
       checkLocationPermission();
     }
   }, [user, fetchEvents]);
+
+  // hydrate joined-state from backend when events or user change
+  useEffect(() => {
+    if (!user || events.length === 0) return;
+    events.forEach(event => {
+      hasJoinedEvent(event.id, user.id);
+    });
+  }, [user, events, hasJoinedEvent]);
 
   // Warm the clustered map chunk so it’s ready when we render it
   useEffect(() => {
@@ -156,7 +167,6 @@ export default function HomePage() {
         }
       },
       {
-        // Faster first fix; you can add a watchPosition later if you want refinement
         enableHighAccuracy: false,
         timeout: 4000,
         maximumAge: 600000,
@@ -175,10 +185,28 @@ export default function HomePage() {
   const handleJoinEvent = async (eventId: string) => {
     if (!user) return;
     try {
-      await joinEvent(eventId, user.id);
-      toast.success("Successfully joined the event!");
+      const ok = await joinEvent(eventId, user.id);
+      if (ok) {
+        toast.success("Successfully joined the event!");
+      } else {
+        toast.error("You have already joined this event");
+      }
     } catch {
       toast.error("Failed to join event");
+    }
+  };
+
+  const handleLeaveEvent = async (eventId: string) => {
+    if (!user) return;
+    try {
+      const ok = await leaveEvent(eventId, user.id);
+      if (ok) {
+        toast.success("You have left the event");
+      } else {
+        toast.error("Failed to leave event");
+      }
+    } catch {
+      toast.error("Failed to leave event");
     }
   };
 
@@ -334,10 +362,10 @@ export default function HomePage() {
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}
-                tagsList={
-                  // compute unique tags from all events
-                  Array.from(new Set(events.flatMap(e => e.tags))).slice(0, 50)
-                }
+                tagsList={Array.from(new Set(events.flatMap(e => e.tags))).slice(
+                  0,
+                  50
+                )}
                 selectedTags={selectedTags}
                 onTagsChange={setSelectedTags}
                 dateSort={dateSort}
@@ -347,7 +375,6 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* ⬇️ Map now mounts regardless of loading/event count */}
         {viewMode === "map" ? (
           <div className="relative z-0 h-[600px] rounded-lg overflow-hidden shadow-lg">
             <ClusteredFlameMap
@@ -364,7 +391,10 @@ export default function HomePage() {
             {loading && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-48 rounded-lg bg-muted/20 animate-pulse" />
+                  <div
+                    key={i}
+                    className="h-48 rounded-lg bg-muted/20 animate-pulse"
+                  />
                 ))}
               </div>
             )}
@@ -398,7 +428,9 @@ export default function HomePage() {
                   >
                     <EventCard
                       event={event}
+                      isJoined={!!hasJoinedMap[event.id]}
                       onJoin={() => handleJoinEvent(event.id)}
+                      onLeave={() => handleLeaveEvent(event.id)}
                       onShare={() => {
                         navigator.share?.({
                           title: event.title,
