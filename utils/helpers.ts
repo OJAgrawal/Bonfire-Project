@@ -21,6 +21,16 @@ export const formatDate = (dateString: string): string => {
   });
 };
 
+export const formatDateWithYear = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
 export const formatTime = (timeString: string): string => {
   const [hours, minutes] = timeString.split(':');
   const date = new Date();
