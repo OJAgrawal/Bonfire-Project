@@ -33,6 +33,13 @@ export function MapSideMenu({
 }: MapSideMenuProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
+  // Sort events by date and time in ascending order (earliest first)
+  const sortedEvents = [...events].sort((a, b) => {
+    const dateA = new Date(`${a.date}T${a.time || '00:00'}`);
+    const dateB = new Date(`${b.date}T${b.time || '00:00'}`);
+    return dateA.getTime() - dateB.getTime();
+  });
+
   const handleEventSelect = (event: Event) => {
     setSelectedEventId(event.id);
     onEventClick(event);
@@ -96,7 +103,7 @@ export function MapSideMenu({
                 </div>
               ) : (
                 <div className="p-3 space-y-2">
-                  {events.map((event) => (
+                  {sortedEvents.map((event) => (
                     <motion.div
                       key={event.id}
                       initial={{ opacity: 0, y: 10 }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -69,6 +69,17 @@ export default function HomePage() {
     useState<"granted" | "denied" | "prompt" | null>(null);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [showMapSideMenu, setShowMapSideMenu] = useState(true);
+  const [visibleMapEvents, setVisibleMapEvents] = useState<any[]>([]);
+  const visibleEventsDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleVisibleEventsChange = useCallback((events: any[]) => {
+    if (visibleEventsDebounceRef.current) {
+      clearTimeout(visibleEventsDebounceRef.current);
+    }
+    visibleEventsDebounceRef.current = setTimeout(() => {
+      setVisibleMapEvents(events);
+    }, 100);
+  }, []);
 
   useEffect(() => {
     initialize();
@@ -93,7 +104,7 @@ export default function HomePage() {
     events.forEach(event => {
       hasJoinedEvent(event.id, user.id);
     });
-  }, [user, events, hasJoinedEvent]);
+  }, [user, events]);
 
   // Warm the clustered map chunk so it’s ready when we render it
   useEffect(() => {
@@ -182,7 +193,17 @@ export default function HomePage() {
     setLocationPermission("denied");
   };
 
-  const handleEventClick = (event: any) => router.push(`/event/${event.id}`);
+  const handleEventClick = (event: any) => {
+    // For map view, this will trigger the modal to open on the event marker
+    // For other views, navigate to event details
+    if (viewMode === "map") {
+      // The map will handle opening the popup when this is called from ClusteredFlameMap
+      // For side menu clicks, we need to dispatch a custom event to trigger the marker popup
+      window.dispatchEvent(new CustomEvent('openEventPopup', { detail: event }));
+    } else {
+      router.push(`/event/${event.id}`);
+    }
+  };
 
   const handleJoinEvent = async (eventId: string) => {
     if (!user) return;
@@ -383,9 +404,10 @@ export default function HomePage() {
               events={displayedEvents}
               onEventClick={handleEventClick}
               userLocation={userLocation}
+              onVisibleEventsChange={handleVisibleEventsChange}
             />
             <MapSideMenu
-              events={displayedEvents}
+              events={visibleMapEvents}
               onEventClick={handleEventClick}
               isOpen={showMapSideMenu}
               onToggle={setShowMapSideMenu}

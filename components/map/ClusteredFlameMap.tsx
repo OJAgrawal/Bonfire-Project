@@ -103,10 +103,12 @@ function MapContent({
   events,
   onEventClick,
   userLocation,
+  onVisibleEventsChange,
 }: {
   events: Event[];
   onEventClick: (e: Event) => void;
   userLocation: UserLocation;
+  onVisibleEventsChange?: (events: Event[]) => void;
 }) {
   const map = useMap();
   const [zoom, setZoom] = useState<number>(map.getZoom());
@@ -114,6 +116,123 @@ function MapContent({
   const { index, clusters } = useClusters(events, zoom, bounds);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
+  const openPopupRef = useRef<string | null>(null); // Track currently open popup
+  const indexRef = useRef<any>(index); // Keep index reference updated
+
+  // Update index ref
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+
+  // Listen for openEventPopup event from side menu
+  useEffect(() => {
+    const handleOpenPopup = (e: any) => {
+      const event = e.detail;
+      if (!event || !event.id) return;
+
+      console.log('Opening popup for event:', event.id);
+
+      // Close previously open popup
+      if (openPopupRef.current && openPopupRef.current !== event.id) {
+        const prevMarker = markerRefs.current.get(openPopupRef.current);
+        if (prevMarker) {
+          prevMarker.closePopup();
+        }
+      }
+
+      const marker = markerRefs.current.get(event.id);
+      console.log('Marker exists:', !!marker);
+      
+      if (marker) {
+        // Marker exists (not clustered), pan and open
+        console.log('Marker found, opening directly');
+        map.panTo([event.latitude, event.longitude], { animate: true });
+        setTimeout(() => {
+          try {
+            const popup = marker.getPopup();
+            if (popup) {
+              marker.openPopup();
+              openPopupRef.current = event.id;
+              console.log('Popup opened successfully');
+            } else {
+              console.warn('Popup not found on marker');
+            }
+          } catch (error) {
+            console.error('Error opening popup:', error);
+          }
+        }, 300);
+      } else {
+        // Marker doesn't exist yet (likely clustered)
+        // Find which cluster contains this event and get the expansion zoom
+        console.log('Marker not found, finding containing cluster');
+        
+        const currentZoom = map.getZoom();
+        const allClusters = indexRef.current.getClusters([-180, -85, 180, 85], currentZoom);
+        
+        let targetZoom = currentZoom + 2; // Default fallback
+        
+        // Find the cluster that contains this event
+        for (const cluster of allClusters) {
+          if (cluster.properties.cluster) {
+            const children = indexRef.current.getChildren(cluster.properties.cluster_id);
+            const hasEvent = children.some((child: any) => child.properties.id === event.id);
+            if (hasEvent) {
+              // Get the zoom level that will expand this cluster
+              targetZoom = Math.min(
+                indexRef.current.getClusterExpansionZoom(cluster.properties.cluster_id),
+                18
+              );
+              console.log('Found cluster, expansion zoom:', targetZoom);
+              break;
+            }
+          }
+        }
+        
+        console.log('Zooming to level:', targetZoom);
+        map.setView([event.latitude, event.longitude], targetZoom, { animate: true });
+        
+        // After zooming, wait for re-render and try again with retry logic
+        let retries = 0;
+        const maxRetries = 5;
+        
+        const tryOpenPopup = () => {
+          retries++;
+          const newMarker = markerRefs.current.get(event.id);
+          console.log(`Retry ${retries}: Marker found:`, !!newMarker);
+          
+          if (newMarker) {
+            try {
+              console.log('Opening popup after zoom');
+              const popup = newMarker.getPopup();
+              if (popup) {
+                newMarker.openPopup();
+                openPopupRef.current = event.id;
+                console.log('Popup opened after zoom');
+              } else {
+                console.warn('Popup not ready on retry', retries);
+                if (retries < maxRetries) {
+                  setTimeout(tryOpenPopup, 200);
+                }
+              }
+            } catch (error) {
+              console.error('Error opening popup after zoom:', error);
+            }
+          } else if (retries < maxRetries) {
+            // Retry after 200ms
+            setTimeout(tryOpenPopup, 200);
+          } else {
+            console.log('Max retries reached, marker still not found');
+          }
+        };
+        
+        // Start retry logic after initial wait for zoom animation
+        setTimeout(tryOpenPopup, 500);
+      }
+    };
+
+    window.addEventListener('openEventPopup', handleOpenPopup as any);
+    return () => window.removeEventListener('openEventPopup', handleOpenPopup as any);
+  }, [map]);
 
   useEffect(() => {
     let debounceTimer: NodeJS.Timeout;
@@ -131,6 +250,58 @@ function MapContent({
       map.off('moveend', onMove);
     };
   }, [map]);
+  // Extract visible events from clusters and notify parent
+  useEffect(() => {
+    if (!onVisibleEventsChange) return;
+    
+    const visibleEvents: Event[] = [];
+    const seenIds = new Set<string>();
+
+    // Recursive function to get all individual events from a cluster
+    const getAllClusterMembers = (clusterId: number): any[] => {
+      const children = index.getChildren(clusterId);
+      const members: any[] = [];
+      
+      children.forEach((child: any) => {
+        if (child.properties.cluster) {
+          // If child is also a cluster, recurse
+          members.push(...getAllClusterMembers(child.properties.cluster_id));
+        } else {
+          // If it's an individual event, add it
+          members.push(child);
+        }
+      });
+      
+      return members;
+    };
+
+    clusters.forEach((c: any) => {
+      if (c.properties.cluster) {
+        // For clustered items, get all members recursively
+        const allMembers = getAllClusterMembers(c.properties.cluster_id);
+        allMembers.forEach((member: any) => {
+          if (member.properties.id && !seenIds.has(member.properties.id)) {
+            const event = events.find((e) => e.id === member.properties.id);
+            if (event) {
+              visibleEvents.push(event);
+              seenIds.add(event.id);
+            }
+          }
+        });
+      } else {
+        // For non-clustered items
+        if (c.properties.id && !seenIds.has(c.properties.id)) {
+          const event = events.find((e) => e.id === c.properties.id);
+          if (event) {
+            visibleEvents.push(event);
+            seenIds.add(event.id);
+          }
+        }
+      }
+    });
+    
+    onVisibleEventsChange(visibleEvents);
+  }, [clusters, events, onVisibleEventsChange, index]);
 
   return (
     <>
@@ -175,24 +346,51 @@ function MapContent({
             ref={(markerRef) => {
               if (markerRef) {
                 markerRefs.current.set(ev.id, markerRef);
+              } else {
+                // Clean up when marker unmounts
+                markerRefs.current.delete(ev.id);
               }
             }}
             eventHandlers={{
               mouseover: (e) => {
-                e.target.openPopup();
+                // Close previously open popup when hovering over a new marker
+                if (openPopupRef.current && openPopupRef.current !== ev.id) {
+                  const prevMarker = markerRefs.current.get(openPopupRef.current);
+                  if (prevMarker) {
+                    prevMarker.closePopup();
+                  }
+                }
+                
+                // Open popup immediately on hover
+                try {
+                  const currentMarker = markerRefs.current.get(ev.id);
+                  if (currentMarker && currentMarker.getPopup()) {
+                    currentMarker.openPopup();
+                    openPopupRef.current = ev.id;
+                  }
+                } catch (error) {
+                  console.warn('Error opening popup on hover:', error);
+                }
               },
               mouseout: (e) => {
                 // Close popup only if mouse leaves both marker and popup
-                const popupElement = e.target.getPopup()?.getElement();
-                if (popupElement) {
-                  popupElement.addEventListener('mouseenter', () => {
-                    e.target.openPopup();
-                  });
-                  popupElement.addEventListener('mouseleave', () => {
-                    e.target.closePopup();
-                  });
+                try {
+                  const popupElement = e.target.getPopup()?.getElement();
+                  if (popupElement) {
+                    popupElement.addEventListener('mouseenter', () => {
+                      e.target.openPopup();
+                    });
+                    popupElement.addEventListener('mouseleave', () => {
+                      e.target.closePopup();
+                      if (openPopupRef.current === ev.id) {
+                        openPopupRef.current = null;
+                      }
+                    });
+                  }
+                  e.target.closePopup();
+                } catch (error) {
+                  console.warn('Error closing popup on mouseout:', error);
                 }
-                e.target.closePopup();
               },
               click: () => onEventClick(ev),
             }}
@@ -204,6 +402,10 @@ function MapContent({
               }} onMouseLeave={() => {
                 const marker = markerRefs.current.get(ev.id);
                 if (marker) marker.closePopup();
+                // Only clear if this is still the open popup
+                if (openPopupRef.current === ev.id) {
+                  openPopupRef.current = null;
+                }
               }}>
                 <div className="font-semibold text-lg mb-2">{ev.title}</div>
                 {ev.description && (
@@ -285,6 +487,7 @@ export default function ClusteredFlameMap({
   events,
   onEventClick,
   userLocation,
+  onVisibleEventsChange,
   height = 600,
   initialCenter = [12.9716, 77.5946] as [number, number],
   initialZoom = 12,
@@ -293,6 +496,7 @@ export default function ClusteredFlameMap({
   events: Event[];
   onEventClick: (e: Event) => void;
   userLocation: UserLocation;
+  onVisibleEventsChange?: (events: Event[]) => void;
   height?: number;
   initialCenter?: [number, number];
   initialZoom?: number;
@@ -321,7 +525,7 @@ export default function ClusteredFlameMap({
           attribution="&copy; OpenStreetMap contributors"
         />
         <RecenterOnLocation userLocation={userLocation} behavior={recenterBehavior} minZoom={14} />
-        <MapContent events={events} onEventClick={onEventClick} userLocation={userLocation} />
+        <MapContent events={events} onEventClick={onEventClick} userLocation={userLocation} onVisibleEventsChange={onVisibleEventsChange} />
       </MapContainer>
     </div>
   );
