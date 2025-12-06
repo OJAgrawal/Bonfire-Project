@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/common/header';
@@ -18,6 +18,16 @@ import { EventCategory } from '@/types';
 import { toast } from 'sonner';
 import { ArrowLeft, MapPin, Calendar, Clock, Users, Tag } from 'lucide-react';
 import { LocationAutocomplete } from '@/components/ui/location-autocomplete';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -30,6 +40,8 @@ export default function CreateEventPage() {
   const maxDateStr = maxDate.toISOString().split('T')[0];
 
   const [loading, setLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -37,15 +49,57 @@ export default function CreateEventPage() {
     location: '',
     latitude: 26.8060,
     longitude: 75.8022,
-    date: '',
+    date: todayStr,
     time: '',
-    end_date: '',
+    end_date: todayStr,
     end_time: '',
     time_zone: 'Asia/Kolkata',
     category: '' as EventCategory,
     max_attendees: '',
     tags: '',
   });
+
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Intercept all router navigation
+  useEffect(() => {
+    const routerPush = router.push.bind(router);
+    const routerReplace = router.replace.bind(router);
+    
+    router.push = (url: any) => {
+      if (hasUnsavedChanges) {
+        setShowExitDialog(true);
+        (window as any).__pendingNavigation = url;
+      } else {
+        routerPush(url);
+      }
+    };
+    
+    router.replace = (url: any) => {
+      if (hasUnsavedChanges) {
+        setShowExitDialog(true);
+        (window as any).__pendingNavigation = url;
+      } else {
+        routerReplace(url);
+      }
+    };
+    
+    return () => {
+      router.push = routerPush;
+      router.replace = routerReplace;
+    };
+  }, [router, hasUnsavedChanges, showExitDialog]);
 
   // ✅ Wait for auth to hydrate
   if (authLoading) {
@@ -138,6 +192,46 @@ export default function CreateEventPage() {
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Check if any meaningful change was made (not just default dates)
+    if (field !== 'date' && field !== 'end_date') {
+      setHasUnsavedChanges(true);
+    } else if (field === 'date' && value !== todayStr) {
+      setHasUnsavedChanges(true);
+    } else if (field === 'end_date' && value !== todayStr) {
+      setHasUnsavedChanges(true);
+    }
+  };
+
+  const handleBack = () => {
+    if (hasUnsavedChanges) {
+      setShowExitDialog(true);
+    } else {
+      router.back();
+    }
+  };
+
+  const confirmExit = () => {
+    // Remove beforeunload listener by directly setting hasUnsavedChanges to false
+    // This will trigger the useEffect to unregister the handler
+    setHasUnsavedChanges(false);
+    setShowExitDialog(false);
+    
+    // Small delay to allow state to update before navigation
+    setTimeout(() => {
+      // Check if there's a pending navigation from router.push/router.replace
+      const pendingNav = (window as any).__pendingNavigation;
+      if (pendingNav) {
+        (window as any).__pendingNavigation = null;
+        // Directly navigate without triggering the interceptor again
+        if (typeof pendingNav === 'string') {
+          window.location.href = pendingNav;
+        } else {
+          router.push(pendingNav);
+        }
+      } else {
+        router.back();
+      }
+    }, 0);
   };
 
   return (
@@ -151,7 +245,7 @@ export default function CreateEventPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.back()}
+              onClick={handleBack}
               className="p-2"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -391,7 +485,7 @@ export default function CreateEventPage() {
                       type="button"
                       variant="outline"
                       className="flex-1"
-                      onClick={() => router.back()}
+                      onClick={handleBack}
                     >
                       Cancel
                     </Button>
@@ -411,6 +505,22 @@ export default function CreateEventPage() {
       </main>
 
       <BottomNav />
+
+      {/* Exit Confirmation Dialog */}
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to leave? All your changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowExitDialog(false)}>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmExit}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

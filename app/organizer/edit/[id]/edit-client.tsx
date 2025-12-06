@@ -41,6 +41,9 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
 
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [initialFormData, setInitialFormData] = useState<any>(null);
   const [formData, setFormData] = useState<any>({
     title: '',
     description: '',
@@ -73,7 +76,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
       const end = new Date(start.getTime() + (ev.duration || 0) * 60 * 1000);
       const pad = (n: number) => String(n).padStart(2, '0');
 
-      setFormData({
+      const loadedData = {
         title: ev.title || '',
         description: ev.description || '',
         image_url: ev.image_url || '',
@@ -88,7 +91,10 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
         category: ev.category || '',
         max_attendees: ev.max_attendees ? String(ev.max_attendees) : '',
         tags: (ev.tags || []).join(', '),
-      });
+      };
+
+      setFormData(loadedData);
+      setInitialFormData(loadedData);
     }
   }, [selectedEvent]);
 
@@ -99,7 +105,90 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
   }
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+    setFormData((prev: any) => {
+      const updated = { ...prev, [field]: value };
+      // Check if form has been modified from initial state
+      if (initialFormData && JSON.stringify(updated) !== JSON.stringify(initialFormData)) {
+        setHasUnsavedChanges(true);
+      } else {
+        setHasUnsavedChanges(false);
+      }
+      return updated;
+    });
+  };
+
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Intercept all router navigation
+  useEffect(() => {
+    const routerPush = router.push.bind(router);
+    const routerReplace = router.replace.bind(router);
+    
+    router.push = (url: any) => {
+      if (hasUnsavedChanges) {
+        setShowExitDialog(true);
+        (window as any).__pendingNavigation = url;
+      } else {
+        routerPush(url);
+      }
+    };
+    
+    router.replace = (url: any) => {
+      if (hasUnsavedChanges) {
+        setShowExitDialog(true);
+        (window as any).__pendingNavigation = url;
+      } else {
+        routerReplace(url);
+      }
+    };
+    
+    return () => {
+      router.push = routerPush;
+      router.replace = routerReplace;
+    };
+  }, [router, hasUnsavedChanges, showExitDialog]);
+
+  const handleBack = () => {
+    if (hasUnsavedChanges) {
+      setShowExitDialog(true);
+    } else {
+      router.back();
+    }
+  };
+
+  const confirmExit = () => {
+    // Remove beforeunload listener by directly setting hasUnsavedChanges to false
+    // This will trigger the useEffect to unregister the handler
+    setHasUnsavedChanges(false);
+    setShowExitDialog(false);
+    
+    // Small delay to allow state to update before navigation
+    setTimeout(() => {
+      // Check if there's a pending navigation from router.push/router.replace
+      const pendingNav = (window as any).__pendingNavigation;
+      if (pendingNav) {
+        (window as any).__pendingNavigation = null;
+        // Directly navigate without triggering the interceptor again
+        if (typeof pendingNav === 'string') {
+          window.location.href = pendingNav;
+        } else {
+          router.push(pendingNav);
+        }
+      } else {
+        router.back();
+      }
+    }, 0);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -193,6 +282,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
 
       // Replace the route and refresh the app router to force server components to re-evaluate
       console.log('Navigating to event page and refreshing route...');
+      setHasUnsavedChanges(false); // Clear unsaved changes flag after successful save
       router.replace(`/event/${selectedEvent.id}`);
       // router.replace is synchronous; call refresh to make sure server data is reloaded
       try {
@@ -219,7 +309,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.back()}
+              onClick={handleBack}
               className="p-2"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -336,7 +426,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
 
                   {/* Submit */}
                   <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                    <Button type="button" variant="outline" className="flex-1" onClick={() => router.back()}>Cancel</Button>
+                    <Button type="button" variant="outline" className="flex-1" onClick={handleBack}>Cancel</Button>
                     <Button type="button" className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white" disabled={loading} onClick={() => setConfirmOpen(true)}>{loading ? 'Saving...' : 'Save Changes'}</Button>
                   </div>
                 </form>
@@ -360,6 +450,22 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
       </main>
 
       <BottomNav />
+
+      {/* Exit Confirmation Dialog */}
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to leave? All your changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowExitDialog(false)}>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmExit}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
