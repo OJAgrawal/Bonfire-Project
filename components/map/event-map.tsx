@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { Icon } from 'leaflet';
@@ -41,6 +41,10 @@ interface EventMapProps {
   className?: string;
 }
 
+export interface EventMapRef {
+  zoomToEvent: (event: Event) => void;
+}
+
 // User location marker icon
 const userLocationIcon = new Icon({
   iconUrl:
@@ -51,14 +55,16 @@ const userLocationIcon = new Icon({
   className: 'user-location-marker',
 });
 
-function MapEvents({
+function MapEventsComponent({
   events,
   onEventClick,
   userLocation,
+  markersRef,
 }: {
   events: Event[];
   onEventClick: (event: Event) => void;
   userLocation?: UserLocation | null;
+  markersRef: React.MutableRefObject<Map<string, any>>;
 }) {
   const map = useMap();
 
@@ -100,6 +106,11 @@ function MapEvents({
             key={event.id}
             position={[event.latitude, event.longitude]}
             icon={flameIcon}
+            ref={(el) => {
+              if (el) {
+                markersRef.current.set(event.id, el);
+              }
+            }}
           >
             <Popup className="min-w-[250px]">
               <div className="p-2">
@@ -149,85 +160,110 @@ function MapEvents({
   );
 }
 
-export function EventMap({
-  events,
-  onEventClick,
-  onBoundsChange,
-  userLocation,
-  className,
-}: EventMapProps) {
-  const mapRef = useRef<any>(null);
+export const EventMap = forwardRef<EventMapRef, EventMapProps>(
+  function EventMap(
+    {
+      events,
+      onEventClick,
+      onBoundsChange,
+      userLocation,
+      className,
+    },
+    ref
+  ) {
+    const mapRef = useRef<any>(null);
+    const markersRef = useRef<Map<string, any>>(new Map());
 
-  const handleBoundsChange = () => {
-    if (mapRef.current && onBoundsChange) {
-      const bounds = mapRef.current.getBounds();
-      onBoundsChange({
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest(),
-      });
-    }
-  };
-
-  const getInitialCenter = (): [number, number] => {
-    if (userLocation) {
-      return [userLocation.latitude, userLocation.longitude];
-    }
-    return [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
-  };
-
-  const getInitialZoom = (): number => {
-    return userLocation ? 13 : DEFAULT_MAP_ZOOM;
-  };
-
-  return (
-    <div className={className}>
-      <style jsx>{`
-        .flame-marker {
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    useImperativeHandle(ref, () => ({
+      zoomToEvent: (event: Event) => {
+        if (mapRef.current) {
+          mapRef.current.setView([event.latitude, event.longitude], 16, {
+            animate: true,
+            duration: 1,
+          });
+          // Open the popup for the marker
+          setTimeout(() => {
+            const marker = markersRef.current.get(event.id);
+            if (marker) {
+              marker.openPopup();
+            }
+          }, 200);
         }
-        .flame-marker:hover {
-          filter: drop-shadow(0 4px 8px rgba(255, 87, 34, 0.5));
-        }
-        .user-location-marker {
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-          animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-          0% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.1);
-          }
-          100% {
-            transform: scale(1);
-          }
-        }
-      `}</style>
-      <MapContainer
-        center={getInitialCenter()}
-        zoom={getInitialZoom()}
-        className="h-full w-full rounded-lg"
-        ref={mapRef}
-        whenReady={() => {
-          if (mapRef.current) {
-            mapRef.current.on('moveend', handleBoundsChange);
-          }
-        }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        />
+      },
+    }), []);
 
-        <MapEvents
-          events={events}
-          onEventClick={onEventClick}
-          userLocation={userLocation}
-        />
-      </MapContainer>
-    </div>
-  );
-}
+    const handleBoundsChange = () => {
+      if (mapRef.current && onBoundsChange) {
+        const bounds = mapRef.current.getBounds();
+        onBoundsChange({
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest(),
+        });
+      }
+    };
+
+    const getInitialCenter = (): [number, number] => {
+      if (userLocation) {
+        return [userLocation.latitude, userLocation.longitude];
+      }
+      return [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
+    };
+
+    const getInitialZoom = (): number => {
+      return userLocation ? 13 : DEFAULT_MAP_ZOOM;
+    };
+
+    return (
+      <div className={className}>
+        <style jsx>{`
+          .flame-marker {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+          }
+          .flame-marker:hover {
+            filter: drop-shadow(0 4px 8px rgba(255, 87, 34, 0.5));
+          }
+          .user-location-marker {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            animation: pulse 2s infinite;
+          }
+          @keyframes pulse {
+            0% {
+              transform: scale(1);
+            }
+            50% {
+              transform: scale(1.1);
+            }
+            100% {
+              transform: scale(1);
+            }
+          }
+        `}</style>
+        <MapContainer
+          center={getInitialCenter()}
+          zoom={getInitialZoom()}
+          className="h-full w-full rounded-lg"
+          ref={mapRef}
+          whenReady={() => {
+            if (mapRef.current) {
+              mapRef.current.on('moveend', handleBoundsChange);
+            }
+          }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+
+          <MapEventsComponent
+            events={events}
+            onEventClick={onEventClick}
+            userLocation={userLocation}
+            markersRef={markersRef}
+          />
+        </MapContainer>
+      </div>
+    );
+  }
+);

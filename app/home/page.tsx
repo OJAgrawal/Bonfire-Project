@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/common/header";
 import { BottomNav } from "@/components/common/bottom-nav";
 import { EventCard } from "@/components/common/event-card";
+import { MapSideMenu } from "@/components/map/map-side-menu";
 const ClusteredFlameMap = dynamic(
   () => import("@/components/map/ClusteredFlameMap"),
   {
@@ -67,6 +68,7 @@ export default function HomePage() {
   const [locationPermission, setLocationPermission] =
     useState<"granted" | "denied" | "prompt" | null>(null);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [showMapSideMenu, setShowMapSideMenu] = useState(true);
 
   useEffect(() => {
     initialize();
@@ -381,6 +383,12 @@ export default function HomePage() {
               events={displayedEvents}
               onEventClick={handleEventClick}
               userLocation={userLocation}
+            />
+            <MapSideMenu
+              events={displayedEvents}
+              onEventClick={handleEventClick}
+              isOpen={showMapSideMenu}
+              onToggle={setShowMapSideMenu}
             />
             {loading && (
               <div className="absolute inset-0 bg-background/40 backdrop-blur-sm animate-pulse pointer-events-none" />
