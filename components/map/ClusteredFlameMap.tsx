@@ -599,6 +599,9 @@ export default function ClusteredFlameMap({
         zoomAnimation={true}
         fadeAnimation={true}
         markerZoomAnimation={true}
+        minZoom={2}
+        maxBounds={[[-85, -170], [85, 170]]}
+        maxBoundsViscosity={1.0}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
