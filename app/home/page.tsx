@@ -194,15 +194,13 @@ export default function HomePage() {
   };
 
   const handleEventClick = (event: any) => {
-    // For map view, this will trigger the modal to open on the event marker
-    // For other views, navigate to event details
-    if (viewMode === "map") {
-      // The map will handle opening the popup when this is called from ClusteredFlameMap
-      // For side menu clicks, we need to dispatch a custom event to trigger the marker popup
-      window.dispatchEvent(new CustomEvent('openEventPopup', { detail: event }));
-    } else {
-      router.push(`/event/${event.id}`);
-    }
+    // Navigate to event details page
+    router.push(`/event/${event.id}`);
+  };
+
+  const handleEventSelectForZoom = (event: any) => {
+    // Trigger map zoom/popup interaction without navigation
+    window.dispatchEvent(new CustomEvent('zoomToEvent', { detail: event }));
   };
 
   const handleJoinEvent = async (eventId: string) => {
@@ -409,6 +407,7 @@ export default function HomePage() {
             <MapSideMenu
               events={visibleMapEvents}
               onEventClick={handleEventClick}
+              onEventSelect={handleEventSelectForZoom}
               isOpen={showMapSideMenu}
               onToggle={setShowMapSideMenu}
             />

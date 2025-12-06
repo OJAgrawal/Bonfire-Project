@@ -21,6 +21,7 @@ import { formatDate, formatTime } from '@/utils/helpers';
 interface MapSideMenuProps {
   events: Event[];
   onEventClick: (event: Event) => void;
+  onEventSelect?: (event: Event) => void;
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
 }
@@ -28,6 +29,7 @@ interface MapSideMenuProps {
 export function MapSideMenu({
   events,
   onEventClick,
+  onEventSelect,
   isOpen = true,
   onToggle,
 }: MapSideMenuProps) {
@@ -40,8 +42,16 @@ export function MapSideMenu({
     return dateA.getTime() - dateB.getTime();
   });
 
-  const handleEventSelect = (event: Event) => {
+  const handleEventSelectClick = (event: Event) => {
     setSelectedEventId(event.id);
+    // Trigger zoom/map interaction
+    if (onEventSelect) {
+      onEventSelect(event);
+    }
+  };
+
+  const handleViewDetails = (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
     onEventClick(event);
   };
 
@@ -118,7 +128,7 @@ export function MapSideMenu({
                             ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
                             : 'border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600'
                         )}
-                        onClick={() => handleEventSelect(event)}
+                        onClick={() => handleEventSelectClick(event)}
                       >
                         <div className="flex gap-3">
                           {/* Event Image Thumbnail */}
@@ -172,10 +182,20 @@ export function MapSideMenu({
                               </div>
                             </div>
 
-                            {/* Badge */}
-                            <Badge variant="secondary" className="text-xs">
-                              {event.category}
-                            </Badge>
+                            {/* Category Badge and View Details Button */}
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {event.category}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-xs px-2 ml-auto text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                onClick={(e) => handleViewDetails(event, e)}
+                              >
+                                View Details →
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </Card>

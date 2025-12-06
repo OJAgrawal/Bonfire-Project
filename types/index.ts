@@ -18,6 +18,7 @@ export interface Event {
   time: string;
   end_date?: string;
   end_time?: string;
+  time_zone?: string;
   duration: number; // in minutes
   category: EventCategory;
   organizer_id: string;

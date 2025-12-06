@@ -234,6 +234,60 @@ function MapContent({
     return () => window.removeEventListener('openEventPopup', handleOpenPopup as any);
   }, [map]);
 
+  // Listen for zoom to event requests from sidebar
+  useEffect(() => {
+    const handleZoomToEvent = (e: CustomEvent) => {
+      const event = e.detail;
+      if (event && event.latitude && event.longitude) {
+        console.log('Zooming to event:', event.id);
+        
+        // Find which cluster contains this event and get the expansion zoom
+        const currentZoom = map.getZoom();
+        const allClusters = indexRef.current.getClusters([-180, -85, 180, 85], currentZoom);
+        
+        let targetZoom = currentZoom + 1; // Default: zoom in by 1 level
+        let foundInCluster = false;
+        
+        // Find the cluster that contains this event
+        for (const cluster of allClusters) {
+          if (cluster.properties.cluster) {
+            const children = indexRef.current.getChildren(cluster.properties.cluster_id);
+            const hasEvent = children.some((child: any) => child.properties.id === event.id);
+            if (hasEvent) {
+              // Get the zoom level that will expand this cluster (uncluster the events)
+              targetZoom = Math.min(
+                indexRef.current.getClusterExpansionZoom(cluster.properties.cluster_id),
+                18
+              );
+              foundInCluster = true;
+              console.log('Found in cluster, expansion zoom:', targetZoom);
+              break;
+            }
+          }
+        }
+        
+        // If not in a cluster, use a moderate zoom level
+        if (!foundInCluster) {
+          targetZoom = Math.max(currentZoom, 14);
+        }
+        
+        map.setView([event.latitude, event.longitude], targetZoom, { animate: true });
+        
+        // Open popup after zoom completes
+        setTimeout(() => {
+          const marker = markerRefs.current.get(event.id);
+          if (marker) {
+            marker.openPopup();
+            openPopupRef.current = event.id;
+          }
+        }, 600);
+      }
+    };
+
+    window.addEventListener('zoomToEvent', handleZoomToEvent as any);
+    return () => window.removeEventListener('zoomToEvent', handleZoomToEvent as any);
+  }, [map]);
+
   useEffect(() => {
     let debounceTimer: NodeJS.Timeout;
     const onMove = () => {
@@ -392,11 +446,10 @@ function MapContent({
                   console.warn('Error closing popup on mouseout:', error);
                 }
               },
-              click: () => onEventClick(ev),
             }}
           >
             <Popup autoClose={false} closeOnClick={false} closeButton={false}>
-              <div className="p-3 min-w-64" onMouseEnter={() => {
+              <div className="overflow-hidden rounded-lg shadow-lg" style={{ width: '280px' }} onMouseEnter={() => {
                 const marker = markerRefs.current.get(ev.id);
                 if (marker) marker.openPopup();
               }} onMouseLeave={() => {
@@ -407,28 +460,55 @@ function MapContent({
                   openPopupRef.current = null;
                 }
               }}>
-                <div className="font-semibold text-lg mb-2">{ev.title}</div>
-                {ev.description && (
-                  <div className="text-sm text-gray-600 mb-2 line-clamp-2">{ev.description}</div>
-                )}
-                <div className="text-sm text-gray-500 mb-3">
-                  <div className="flex items-center gap-1 mb-1">
-                    <span>📍</span>
-                    <span>{ev.location}</span>
+                {/* Event Image */}
+                {ev.image_url && (
+                  <div className="relative h-32 w-full overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600">
+                    <img 
+                      src={ev.image_url} 
+                      alt={ev.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                   </div>
-                  {ev.date && ev.time && (
-                    <div className="flex items-center gap-1">
-                      <span>🕐</span>
-                      <span>{ev.date} at {ev.time}</span>
-                    </div>
+                )}
+                
+                {/* Content */}
+                <div className="p-4 bg-white">
+                  <h3 className="font-bold text-lg mb-2 text-gray-900 line-clamp-2">{ev.title}</h3>
+                  
+                  {ev.description && (
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{ev.description}</p>
                   )}
+                  
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-start gap-2 text-sm text-gray-700">
+                      <span className="text-orange-500 mt-0.5">📍</span>
+                      <span className="line-clamp-1">{ev.location}</span>
+                    </div>
+                    
+                    {ev.date && ev.time && (
+                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                        <span className="text-orange-500">🕐</span>
+                        <span>{ev.date} • {ev.time}</span>
+                      </div>
+                    )}
+                    
+                    {ev.category && (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-700">
+                          {ev.category}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button
+                    className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                    onClick={() => onEventClick(ev)}
+                  >
+                    View Details
+                  </button>
                 </div>
-                <button
-                  className="w-full px-3 py-2 rounded bg-orange-500 text-white font-medium hover:bg-orange-600 transition"
-                  onClick={() => onEventClick(ev)}
-                >
-                  View Details
-                </button>
               </div>
             </Popup>
           </Marker>

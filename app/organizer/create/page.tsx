@@ -24,10 +24,16 @@ export default function CreateEventPage() {
   const { user, loading: authLoading } = useAuthStore(); // ✅ updated
   const { createEvent } = useEventStore();
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() + 1);
+  const maxDateStr = maxDate.toISOString().split('T')[0];
+
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    image_url: '',
     location: '',
     latitude: 26.8060,
     longitude: 75.8022,
@@ -35,6 +41,7 @@ export default function CreateEventPage() {
     time: '',
     end_date: '',
     end_time: '',
+    time_zone: 'Asia/Kolkata',
     category: '' as EventCategory,
     max_attendees: '',
     tags: '',
@@ -60,6 +67,29 @@ export default function CreateEventPage() {
     setLoading(true);
 
     try {
+      const requiredFields = [
+        formData.title,
+        formData.description,
+        formData.category,
+        formData.location,
+        formData.date,
+        formData.time,
+        formData.end_date,
+        formData.end_time,
+      ];
+
+      if (requiredFields.some((field) => !field || String(field).trim() === '')) {
+        toast.warning('Please fill all required fields marked with *');
+        setLoading(false);
+        return;
+      }
+
+      if (new Date(formData.date) > maxDate || new Date(formData.end_date) > maxDate) {
+        toast.warning('Event dates must be within 1 year from today');
+        setLoading(false);
+        return;
+      }
+
       // Calculate duration in minutes
       const startDateTime = new Date(`${formData.date}T${formData.time}`);
       const endDateTime = new Date(`${formData.end_date}T${formData.end_time}`);
@@ -79,6 +109,7 @@ export default function CreateEventPage() {
       await createEvent({
         title: formData.title,
         description: formData.description,
+        image_url: formData.image_url || undefined,
         location: formData.location,
         latitude: formData.latitude,
         longitude: formData.longitude,
@@ -86,6 +117,7 @@ export default function CreateEventPage() {
         time: formData.time,
         end_date: formData.end_date,
         end_time: formData.end_time,
+        time_zone: formData.time_zone,
         duration: durationMinutes,
         category: formData.category,
         organizer_id: user.id,
@@ -176,6 +208,21 @@ export default function CreateEventPage() {
                     />
                   </div>
 
+                  {/* Image URL */}
+                  <div className="space-y-2">
+                    <Label htmlFor="image_url">Cover Image URL</Label>
+                    <Input
+                      id="image_url"
+                      type="url"
+                      placeholder="https://example.com/image.jpg"
+                      value={formData.image_url}
+                      onChange={(e) => handleChange('image_url', e.target.value)}
+                    />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Use a direct image link (JPG, PNG, or GIF).
+                    </p>
+                  </div>
+
                   {/* Category */}
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
@@ -234,7 +281,8 @@ export default function CreateEventPage() {
                         type="date"
                         value={formData.date}
                         onChange={(e) => handleChange('date', e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
+                        min={todayStr}
+                        max={maxDateStr}
                         required
                       />
                     </div>
@@ -266,7 +314,8 @@ export default function CreateEventPage() {
                         type="date"
                         value={formData.end_date}
                         onChange={(e) => handleChange('end_date', e.target.value)}
-                        min={formData.date || new Date().toISOString().split('T')[0]}
+                        min={formData.date || todayStr}
+                        max={maxDateStr}
                         required
                       />
                     </div>
@@ -284,6 +333,23 @@ export default function CreateEventPage() {
                         required
                       />
                     </div>
+                  </div>
+
+                  {/* Time Zone */}
+                  <div className="space-y-2">
+                    <Label htmlFor="time_zone">Time Zone</Label>
+                    <Select value={formData.time_zone} onValueChange={(value) => handleChange('time_zone', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a time zone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asia/Kolkata">IST (Asia/Kolkata, UTC+05:30)</SelectItem>
+                        <SelectItem value="UTC">UTC (Coordinated, UTC+00:00)</SelectItem>
+                        <SelectItem value="America/New_York">ET (America/New_York, UTC-05:00)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">PT (America/Los_Angeles, UTC-08:00)</SelectItem>
+                        <SelectItem value="Europe/London">UK (Europe/London, UTC+00:00)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Max Attendees */}

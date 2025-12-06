@@ -34,11 +34,17 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
   const { user, loading: authLoading } = useAuthStore();
   const { fetchEventById, fetchEvents, selectedEvent, updateEvent } = useEventStore();
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() + 1);
+  const maxDateStr = maxDate.toISOString().split('T')[0];
+
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [formData, setFormData] = useState<any>({
     title: '',
     description: '',
+    image_url: '',
     location: '',
     latitude: 26.8060,
     longitude: 75.8022,
@@ -46,6 +52,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
     time: '',
     end_date: '',
     end_time: '',
+    time_zone: 'Asia/Kolkata',
     category: '' as EventCategory,
     max_attendees: '',
     tags: '',
@@ -69,6 +76,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
       setFormData({
         title: ev.title || '',
         description: ev.description || '',
+        image_url: ev.image_url || '',
         location: ev.location || '',
         latitude: ev.latitude ?? 26.8060,
         longitude: ev.longitude ?? 75.8022,
@@ -76,6 +84,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
         time: ev.time || '',
         end_date: end.toISOString().split('T')[0],
         end_time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+        time_zone: ev.time_zone || 'Asia/Kolkata',
         category: ev.category || '',
         max_attendees: ev.max_attendees ? String(ev.max_attendees) : '',
         tags: (ev.tags || []).join(', '),
@@ -95,6 +104,27 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const requiredFields = [
+      formData.title,
+      formData.description,
+      formData.category,
+      formData.location,
+      formData.date,
+      formData.time,
+      formData.end_date,
+      formData.end_time,
+    ];
+
+    if (requiredFields.some((field: any) => !field || String(field).trim() === '')) {
+      toast.warning('Please fill all required fields marked with *');
+      return;
+    }
+
+    if (new Date(formData.date) > maxDate || new Date(formData.end_date) > maxDate) {
+      toast.warning('Event dates must be within 1 year from today');
+      return;
+    }
+
     setConfirmOpen(true);
   };
 
@@ -127,6 +157,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
       const updated = await updateEvent(selectedEvent.id, {
         title: formData.title,
         description: formData.description,
+        image_url: formData.image_url || undefined,
         location: formData.location,
         latitude: formData.latitude,
         longitude: formData.longitude,
@@ -134,6 +165,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
         time: formData.time,
         end_date: formData.end_date,
         end_time: formData.end_time,
+        time_zone: formData.time_zone,
         duration: durationMinutes,
         category: formData.category,
         max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : undefined,
@@ -215,6 +247,13 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
                     <Textarea id="description" placeholder="Describe your event..." value={formData.description} onChange={(e) => handleChange('description', e.target.value.slice(0,2000))} maxLength={2000} rows={4} required />
                   </div>
 
+                  {/* Image URL */}
+                  <div className="space-y-2">
+                    <Label htmlFor="image_url">Cover Image URL</Label>
+                    <Input id="image_url" type="url" placeholder="https://example.com/image.jpg" value={formData.image_url} onChange={(e) => handleChange('image_url', e.target.value)} />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Use a direct image link (JPG, PNG, or GIF).</p>
+                  </div>
+
                   {/* Category */}
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
@@ -243,7 +282,7 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="date"><Calendar className="inline h-4 w-4 mr-1" /> Start Date *</Label>
-                      <Input id="date" type="date" value={formData.date} onChange={(e) => handleChange('date', e.target.value)} min={new Date().toISOString().split('T')[0]} required />
+                      <Input id="date" type="date" value={formData.date} onChange={(e) => handleChange('date', e.target.value)} min={todayStr} max={maxDateStr} required />
                     </div>
 
                     <div className="space-y-2">
@@ -256,13 +295,30 @@ export default function EditEventForm({ eventId }: { eventId: string }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="end_date"><Calendar className="inline h-4 w-4 mr-1" /> End Date *</Label>
-                      <Input id="end_date" type="date" value={formData.end_date} onChange={(e) => handleChange('end_date', e.target.value)} min={formData.date || new Date().toISOString().split('T')[0]} required />
+                      <Input id="end_date" type="date" value={formData.end_date} onChange={(e) => handleChange('end_date', e.target.value)} min={formData.date || todayStr} max={maxDateStr} required />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="end_time"><Clock className="inline h-4 w-4 mr-1" /> End Time *</Label>
                       <Input id="end_time" type="time" value={formData.end_time} onChange={(e) => handleChange('end_time', e.target.value)} required />
                     </div>
+                  </div>
+
+                  {/* Time Zone */}
+                  <div className="space-y-2">
+                    <Label htmlFor="time_zone">Time Zone</Label>
+                    <Select value={formData.time_zone} onValueChange={(value) => handleChange('time_zone', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a time zone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Asia/Kolkata">IST (Asia/Kolkata, UTC+05:30)</SelectItem>
+                        <SelectItem value="UTC">UTC (Coordinated, UTC+00:00)</SelectItem>
+                        <SelectItem value="America/New_York">ET (America/New_York, UTC-05:00)</SelectItem>
+                        <SelectItem value="America/Los_Angeles">PT (America/Los_Angeles, UTC-08:00)</SelectItem>
+                        <SelectItem value="Europe/London">UK (Europe/London, UTC+00:00)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Max Attendees */}
