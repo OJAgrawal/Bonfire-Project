@@ -101,6 +101,27 @@ export default function CreateEventPage() {
     };
   }, [router, hasUnsavedChanges, showExitDialog]);
 
+  // Intercept browser back button
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    // Push a state so we can intercept the back button
+    window.history.pushState({ unsavedChanges: true }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (hasUnsavedChanges) {
+        // Show confirmation dialog
+        setShowExitDialog(true);
+        // Push state again to stay on current page
+        window.history.pushState({ unsavedChanges: true }, '');
+        (window as any).__pendingNavigation = null;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [hasUnsavedChanges]);
+
   // ✅ Wait for auth to hydrate
   if (authLoading) {
     return (
@@ -229,7 +250,8 @@ export default function CreateEventPage() {
           router.push(pendingNav);
         }
       } else {
-        router.back();
+        // Back button was pressed, go back in history
+        window.history.back();
       }
     }, 0);
   };

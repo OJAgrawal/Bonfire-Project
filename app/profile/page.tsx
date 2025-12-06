@@ -103,10 +103,10 @@ export default function ProfilePage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Profile
-                    </Button>
+                    {/* <Button variant="outline" size="sm"> */}
+                      {/* <Edit className="h-4 w-4 mr-2" /> */}
+                      {/* Edit Profile */}
+                    {/* </Button> */}
                     <Button 
                       variant="outline" 
                       size="sm"
