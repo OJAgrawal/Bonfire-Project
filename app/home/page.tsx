@@ -383,12 +383,6 @@ export default function HomePage() {
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}
-                tagsList={Array.from(new Set(events.flatMap(e => e.tags))).slice(
-                  0,
-                  50
-                )}
-                selectedTags={selectedTags}
-                onTagsChange={setSelectedTags}
                 dateSort={dateSort}
                 onDateSortChange={setDateSort}
               />
